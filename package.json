@@ -17,7 +17,6 @@
     "babel-preset-expo": "^54.0.9",
     "expo": "~54.0.30",
     "expo-auth-session": "~7.0.10",
-    "expo-barcode-scanner": "^13.0.1",
     "expo-camera": "^17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-crypto": "~15.0.8",
@@ -40,6 +39,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "eas-cli": "^16.28.0",
     "typescript": "~5.9.2"
   },
   "private": true
