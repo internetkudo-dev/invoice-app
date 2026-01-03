@@ -8,8 +8,9 @@ import {
     Alert,
     ActivityIndicator,
     StyleSheet,
+    Linking,
 } from 'react-native';
-import { ArrowLeft, Edit, Share2, FileText, Check, Trash2, Eye, RefreshCw, Mail } from 'lucide-react-native';
+import { ArrowLeft, Edit, Share2, FileText, Check, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -17,24 +18,25 @@ import { Card, Button, StatusBadge, TemplatePreview } from '../../components/com
 import { Invoice, InvoiceItem, TemplateType, InvoiceData, Profile } from '../../types';
 import { generatePdf, sharePdf, printPdf } from '../../services/pdf/pdfService';
 import { formatCurrency } from '../../utils/format';
+import { t } from '../../i18n';
 
 interface InvoiceDetailScreenProps {
     navigation: any;
     route: any;
 }
 
-const templates: TemplateType[] = ['classic', 'modern', 'minimalist', 'corporate', 'creative', 'receipt'];
+const formats: string[] = ['A4', 'A5', 'Receipt'];
 
 export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const invoiceId = route.params?.invoiceId;
     const autoPreview = route.params?.autoPreview;
 
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('modern');
+    const [selectedFormat, setSelectedFormat] = useState<string>('A4');
     const [generating, setGenerating] = useState(false);
     const [sending, setSending] = useState(false);
     const [pdfUri, setPdfUri] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         if (invoiceData) {
             setInvoice(invoiceData);
-            setSelectedTemplate((invoiceData.template_id as TemplateType) || 'modern');
+            setSelectedFormat(invoiceData.paper_size || 'A4');
         }
 
         const { data: itemsData } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
@@ -114,6 +116,9 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 notes: invoice.notes,
                 terms: profile.terms_conditions,
                 buyerSignatureUrl: invoice.buyer_signature_url,
+                paymentMethod: invoice.payment_method,
+                amountReceived: Number(invoice.amount_received),
+                changeAmount: Number(invoice.change_amount),
             },
             items: items.map((item) => ({
                 description: item.description,
@@ -127,6 +132,8 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 tax: Number(invoice.tax_amount) || 0,
                 discount: Number(invoice.discount_amount) || 0,
                 total: Number(invoice.total_amount),
+                amountReceived: Number(invoice.amount_received),
+                changeAmount: Number(invoice.change_amount),
             },
             config: profile.template_config,
         };
@@ -136,10 +143,14 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) { Alert.alert('Error', 'Unable to generate PDF'); return; }
 
-        await supabase.from('invoices').update({ template_id: selectedTemplate }).eq('id', invoiceId);
+        await supabase.from('invoices').update({ paper_size: selectedFormat }).eq('id', invoiceId);
 
         setGenerating(true);
-        const result = await generatePdf(data, selectedTemplate);
+        // Map format to template
+        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
+        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+
+        const result = await generatePdf(data, templateToUse);
         setGenerating(false);
 
         if (result.success) {
@@ -169,7 +180,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             if (!data) return;
 
             // 1. Generate PDF
-            const pdfResult = await generatePdf(data, selectedTemplate);
+            let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
+            if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+
+            const pdfResult = await generatePdf(data, templateToUse);
             if (!pdfResult.success || !pdfResult.uri) throw new Error('Failed to generate PDF');
 
             // 2. Open Native Mail Composer
@@ -196,13 +210,18 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
+        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
+        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+
         setGenerating(true);
-        const result = await generatePdf(data, selectedTemplate);
+        const result = await generatePdf(data, templateToUse);
         setGenerating(false);
 
         if (result.success && result.uri) {
             const success = await sharePdf(result.uri);
             if (!success) Alert.alert('Error', 'Failed to share PDF');
+        } else {
+            Alert.alert('Error', result.error || 'Failed to generate PDF for sharing');
         }
     };
 
@@ -210,8 +229,11 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
+        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
+        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+
         setGenerating(true);
-        const success = await printPdf(data, selectedTemplate);
+        const success = await printPdf(data, templateToUse);
         setGenerating(false);
 
         if (!success) Alert.alert('Error', 'Failed to show preview');
@@ -374,15 +396,25 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     ))}
                 </View>
 
-                {/* Template Selection */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Choose Template</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templateScroll} contentContainerStyle={styles.templateScrollContent}>
-                    {templates.map((template) => (
-                        <TouchableOpacity key={template} onPress={() => setSelectedTemplate(template)} activeOpacity={0.8}>
-                            <TemplatePreview template={template} selected={selectedTemplate === template} isDark={isDark} />
+                {/* Format Selection */}
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('paperSize', language) || 'Choose Format'}</Text>
+                <View style={styles.statusRow}>
+                    {formats.map((format) => (
+                        <TouchableOpacity
+                            key={format}
+                            style={[
+                                styles.statusChip,
+                                { backgroundColor: cardBg, flex: 1, justifyContent: 'center' },
+                                selectedFormat === format && { backgroundColor: primaryColor, borderColor: primaryColor }
+                            ]}
+                            onPress={() => setSelectedFormat(format)}
+                        >
+                            <Text style={[styles.statusChipText, { color: mutedColor }, selectedFormat === format && { color: '#fff' }]}>
+                                {format}
+                            </Text>
                         </TouchableOpacity>
                     ))}
-                </ScrollView>
+                </View>
 
                 {/* Line Items */}
                 <Text style={[styles.sectionTitle, { color: textColor }]}>Items ({items.length})</Text>
@@ -417,6 +449,22 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                                 <Text style={[styles.summaryLabel, { color: mutedColor }]}>Discount</Text>
                                 <Text style={[styles.summaryValue, { color: '#10b981' }]}>-{formatCurrency(Number(invoice.discount_amount), profile?.currency)}</Text>
                             </View>
+                        )}
+                        <View style={[styles.summaryRow, { marginTop: 4 }]}>
+                            <Text style={[styles.summaryLabel, { color: mutedColor }]}>Payment</Text>
+                            <Text style={[styles.summaryValue, { color: textColor, textTransform: 'capitalize' }]}>{invoice.payment_method || 'Bank'}</Text>
+                        </View>
+                        {invoice.payment_method === 'cash' && (
+                            <>
+                                <View style={styles.summaryRow}>
+                                    <Text style={[styles.summaryLabel, { color: mutedColor }]}>Received</Text>
+                                    <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(Number(invoice.amount_received), profile?.currency)}</Text>
+                                </View>
+                                <View style={styles.summaryRow}>
+                                    <Text style={[styles.summaryLabel, { color: mutedColor }]}>Change</Text>
+                                    <Text style={[styles.summaryValue, { color: primaryColor }]}>{formatCurrency(Number(invoice.change_amount), profile?.currency)}</Text>
+                                </View>
+                            </>
                         )}
                     </View>
                 </Card>
@@ -476,6 +524,33 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             <Text style={[styles.actionText, { color: '#818cf8' }]}>Export</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* Online Payment Actions */}
+                    {(profile?.payment_link_stripe || profile?.payment_link_paypal) && (
+                        <View style={{ marginTop: 24 }}>
+                            <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 12 }]}>Online Payment</Text>
+                            <View style={styles.row}>
+                                {profile?.payment_link_stripe && (
+                                    <TouchableOpacity
+                                        style={[styles.actionButton, { backgroundColor: '#635bff', borderColor: '#635bff' }]}
+                                        onPress={() => profile.payment_link_stripe && Linking.openURL(profile.payment_link_stripe)}
+                                    >
+                                        <Zap color="#fff" size={20} />
+                                        <Text style={[styles.actionText, { color: '#fff' }]}>Stripe</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {profile?.payment_link_paypal && (
+                                    <TouchableOpacity
+                                        style={[styles.actionButton, { backgroundColor: '#0070ba', borderColor: '#0070ba' }]}
+                                        onPress={() => profile.payment_link_paypal && Linking.openURL(profile.payment_link_paypal)}
+                                    >
+                                        <CreditCard color="#fff" size={20} />
+                                        <Text style={[styles.actionText, { color: '#fff' }]}>PayPal</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+                    )}
                 </View>
             </ScrollView >
         </View >

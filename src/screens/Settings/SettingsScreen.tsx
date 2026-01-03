@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Image, Switch, Platform } from 'react-native';
-import { DollarSign, Percent, ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X, Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages, ShieldCheck, FileText, Trash2, Github, Briefcase, Users, Layout, Plus, Mail } from 'lucide-react-native';
+import { DollarSign, Percent, ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X, Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages, ShieldCheck, FileText, Trash2, Github, Briefcase, Users, Layout, Plus, Mail, Building, ArrowLeft, User } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -30,7 +30,7 @@ const companyColors = [
 ];
 
 export function SettingsScreen({ navigation }: any) {
-    const { user, signOut } = useAuth();
+    const { user } = useAuth();
     const { themeMode, setThemeMode, isDark, primaryColor, setPrimaryColor, language, setLanguage } = useTheme();
     const [loading, setLoading] = useState(false);
     const [joinId, setJoinId] = useState('');
@@ -47,7 +47,7 @@ export function SettingsScreen({ navigation }: any) {
         is_grayscale: false,
         updated_at: new Date().toISOString(),
     });
-    const [activeSection, setActiveSection] = useState<string | null>('appearance');
+    const [activeSection, setActiveSection] = useState<string | null>('company');
     const [showSignaturePad, setShowSignaturePad] = useState(false);
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
@@ -62,19 +62,56 @@ export function SettingsScreen({ navigation }: any) {
 
     const fetchProfile = async () => {
         if (!user) return;
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (data) setProfile(data);
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (profileData) {
+            let combined = { ...profileData };
+            if (profileData.active_company_id) {
+                const { data: companyData } = await supabase.from('companies').select('*').eq('id', profileData.active_company_id).single();
+                if (companyData) {
+                    combined = { ...combined, ...companyData };
+                }
+            }
+            setProfile(combined);
+        }
     };
 
     const handleSave = async () => {
         setLoading(true);
         try {
-            const { error } = await supabase.from('profiles').upsert({
-                ...profile,
+            // Save user-specific settings to profiles
+            const { error: profileError } = await supabase.from('profiles').update({
+                biometric_enabled: profile.biometric_enabled,
+                invoice_language: profile.invoice_language,
+                primary_color: profile.primary_color,
                 updated_at: new Date().toISOString()
-            });
-            if (error) throw error;
-            if (error) throw error;
+            }).eq('id', user?.id);
+
+            if (profileError) throw profileError;
+
+            // Save company-specific settings
+            if (profile.active_company_id) {
+                // Exclude fields that belong only to profile or are IDs
+                const {
+                    id, active_company_id, biometric_enabled, role,
+                    invoice_language, primary_color, updated_at,
+                    ...companyFields
+                } = profile;
+
+                const { error: companyError } = await supabase
+                    .from('companies')
+                    .update(companyFields)
+                    .eq('id', profile.active_company_id);
+
+                if (companyError) throw companyError;
+            } else {
+                // Fallback for non-multi-company users
+                const { error } = await supabase.from('profiles').upsert({
+                    ...profile,
+                    updated_at: new Date().toISOString()
+                });
+                if (error) throw error;
+            }
+
             setPrimaryColor(profile.primary_color);
             if (profile.invoice_language) setLanguage(profile.invoice_language);
             Alert.alert(t('save', language), 'OK');
@@ -123,7 +160,7 @@ export function SettingsScreen({ navigation }: any) {
     };
 
     const copyCompanyId = async () => {
-        const id = profile.company_id || user?.id;
+        const id = profile.active_company_id || profile.company_id || user?.id;
         if (id) {
             await Clipboard.setStringAsync(id);
             Alert.alert('Copied', 'Company ID copied to clipboard. Share this with your team.');
@@ -180,11 +217,31 @@ export function SettingsScreen({ navigation }: any) {
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <Text style={[styles.title, { color: textColor }]}>{t('settings', language)}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
+                        <ArrowLeft color={textColor} size={24} />
+                    </TouchableOpacity>
+                    <Text style={[styles.title, { color: textColor }]}>{t('businessSettings', language) || 'Business Settings'}</Text>
+                </View>
                 <Button title={t('save', language)} onPress={handleSave} loading={loading} size="small" />
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                {/* Profile Quick Access */}
+                <TouchableOpacity
+                    style={[styles.profileShortcut, { backgroundColor: primaryColor + '10', borderColor: primaryColor + '30' }]}
+                    onPress={() => navigation.navigate('Profile')}
+                >
+                    <View style={[styles.shortcutIcon, { backgroundColor: primaryColor }]}>
+                        <User color="#fff" size={20} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.shortcutTitle, { color: textColor }]}>Personal Profile & App Preferences</Text>
+                        <Text style={[styles.shortcutSubtitle, { color: mutedColor }]}>Theme, Language, Security & Account</Text>
+                    </View>
+                    <ChevronRight color={primaryColor} size={20} />
+                </TouchableOpacity>
+
                 {/* Company Info */}
                 {renderHeader(t('companyProfile', language), Briefcase, 'company', '#6366f1')}
                 {activeSection === 'company' && (
@@ -210,6 +267,16 @@ export function SettingsScreen({ navigation }: any) {
                         <Text style={[styles.subLabel, { color: mutedColor }]}>Payment Links (Adds Buttons to PDF)</Text>
                         <Input label="Stripe Payment Link" value={profile.payment_link_stripe} onChangeText={(t) => setProfile({ ...profile, payment_link_stripe: t })} placeholder="https://buy.stripe.com/..." />
                         <Input label="PayPal Link" value={profile.payment_link_paypal} onChangeText={(t) => setProfile({ ...profile, payment_link_paypal: t })} placeholder="https://paypal.me/..." />
+
+                        <View style={styles.divider} />
+                        <Text style={[styles.subLabel, { color: mutedColor }]}>Payment Integrations</Text>
+                        <Button
+                            title="Connect Stripe / PayPal"
+                            variant="primary"
+                            icon={CreditCard}
+                            onPress={() => navigation.navigate('PaymentIntegrations')}
+                            style={{ marginTop: 8 }}
+                        />
                     </Card>
                 )}
 
@@ -236,65 +303,36 @@ export function SettingsScreen({ navigation }: any) {
                     </Card>
                 )}
 
-                {/* Language Settings */}
-                {renderHeader(t('language', language), Languages, 'language', '#f59e0b')}
-                {activeSection === 'language' && (
-                    <Card style={styles.sectionContent}>
-                        <Text style={[styles.label, { color: textColor }]}>{t('language', language)}</Text>
-                        <View style={styles.langGrid}>
-                            {languages.map(lang => (
-                                <TouchableOpacity
-                                    key={lang.code}
-                                    style={[styles.langOption, { backgroundColor: accentBg, width: '48%' }, profile.invoice_language === lang.code && { backgroundColor: primaryColor }]}
-                                    onPress={() => setProfile({ ...profile, invoice_language: lang.code })}
-                                >
-                                    <Text style={[styles.langText, { color: textColor, textAlign: 'center' }, profile.invoice_language === lang.code && { color: '#fff' }]}>{lang.label}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </Card>
-                )}
-
-                {/* App Appearance */}
-                {renderHeader(t('appTheme', language), Palette, 'appearance', '#818cf8')}
+                {/* App Appearance & Layout Settings (Business Related) */}
+                {renderHeader('Document Layout', Layout, 'appearance', '#818cf8')}
                 {activeSection === 'appearance' && (
                     <Card style={styles.sectionContent}>
-                        <Text style={[styles.label, { color: textColor }]}>{t('appTheme', language)}</Text>
+                        <Text style={[styles.label, { color: textColor }]}>Default Terms & Conditions</Text>
+                        <Input value={profile.terms_conditions} onChangeText={(t) => setProfile({ ...profile, terms_conditions: t })} multiline numberOfLines={4} placeholder="Payment is due within 30 days..." />
+
+                        <View style={styles.divider} />
+                        <Text style={[styles.label, { color: textColor }]}>Default Paper Size</Text>
                         <View style={styles.langGrid}>
-                            {[
-                                { label: t('systemTheme', language), value: 'system', icon: Smartphone },
-                                { label: t('lightMode', language), value: 'light', icon: Sun },
-                                { label: t('darkMode', language), value: 'dark', icon: Moon },
-                            ].map(mode => (
+                            {['A4', 'A5', 'Receipt'].map(size => (
                                 <TouchableOpacity
-                                    key={mode.value}
-                                    style={[styles.langOption, { backgroundColor: accentBg, flex: 1, alignItems: 'center', gap: 6 }, themeMode === mode.value && { backgroundColor: primaryColor }]}
-                                    onPress={() => setThemeMode(mode.value as any)}
+                                    key={size}
+                                    style={[
+                                        styles.langOption,
+                                        { backgroundColor: accentBg, flex: 1, alignItems: 'center' },
+                                        profile.template_config?.pageSize === size && { backgroundColor: primaryColor }
+                                    ]}
+                                    onPress={() => setProfile({
+                                        ...profile,
+                                        template_config: {
+                                            ...(profile.template_config || { showLogo: true, showSignature: true, showBuyerSignature: true, showStamp: true, visibleColumns: { sku: true, unit: true, tax: true, quantity: true, price: true }, labels: {} }),
+                                            pageSize: size as any
+                                        }
+                                    })}
                                 >
-                                    {React.createElement(mode.icon, { size: 16, color: themeMode === mode.value ? '#fff' : textColor })}
-                                    <Text style={[styles.langText, { color: textColor }, themeMode === mode.value && { color: '#fff' }]}>{mode.label}</Text>
+                                    <Text style={[styles.langText, { color: textColor }, profile.template_config?.pageSize === size && { color: '#fff' }]}>{size}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
-
-                        <View style={styles.divider} />
-                        <Text style={[styles.label, { color: textColor }]}>Brand & UI Color</Text>
-                        <View style={styles.colorGrid}>
-                            {companyColors.map(color => (
-                                <TouchableOpacity
-                                    key={color}
-                                    style={[styles.colorOption, { backgroundColor: color }, profile.primary_color === color && { borderColor: textColor, borderWidth: 3 }]}
-                                    onPress={() => setProfile({ ...profile, primary_color: color })}
-                                />
-                            ))}
-                        </View>
-
-                        <View style={styles.rowBetween}>
-                            <Text style={[styles.label, { color: textColor }]}>Economical / Grayscale Mode</Text>
-                            <Switch value={profile.is_grayscale} onValueChange={(v) => setProfile({ ...profile, is_grayscale: v })} />
-                        </View>
-
-                        <Input label="Default Terms & Conditions" value={profile.terms_conditions} onChangeText={(t) => setProfile({ ...profile, terms_conditions: t })} multiline numberOfLines={4} placeholder="Payment is due within 30 days..." />
 
                         <View style={styles.divider} />
                         <Button
@@ -393,35 +431,29 @@ export function SettingsScreen({ navigation }: any) {
                             </TouchableOpacity>
                         </View>
 
+                        <Button
+                            title="Manage Companies"
+                            variant="primary"
+                            icon={Building}
+                            onPress={() => navigation.navigate('ManageCompanies')}
+                            style={{ marginBottom: 16 }}
+                        />
+
                         <Text style={[styles.hint, { color: mutedColor, marginTop: 12 }]}>
                             Owners can see all company data. Workers can view and create but cannot delete/edit invoices.
                         </Text>
                     </Card>
                 )}
 
-                {/* Security */}
-                {renderHeader('App Security', ShieldCheck, 'security', '#f59e0b')}
-                {activeSection === 'security' && (
-                    <Card style={styles.sectionContent}>
-                        <View style={styles.rowBetween}>
-                            <View style={{ flex: 1, marginRight: 16 }}>
-                                <Text style={[styles.label, { color: textColor }]}>Biometric Lock</Text>
-                                <Text style={[styles.hint, { color: mutedColor }]}>Requires FaceID/Fingerprint to open the app.</Text>
-                            </View>
-                            <Switch value={profile.biometric_enabled} onValueChange={handleBiometricToggle} />
-                        </View>
-                    </Card>
-                )}
+
 
                 {/* Data Management */}
-                {renderHeader('Data & Backup', Download, 'data', '#64748b')}
+                {renderHeader('Backup & Account', Download, 'data', '#64748b')}
                 {activeSection === 'data' && (
                     <Card style={styles.sectionContent}>
                         <Button title="Backup All Data (JSON)" variant="outline" onPress={() => handleExportData('json')} icon={Download} />
                         <View style={{ height: 12 }} />
                         <Button title="Export for Accountant (CSV)" variant="outline" onPress={() => handleExportData('csv')} icon={FileText} />
-                        <View style={{ height: 24 }} />
-                        <Button title="Sign Out" variant="danger" onPress={signOut} icon={X} />
                     </Card>
                 )}
 
@@ -520,5 +552,9 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-    }
+    },
+    profileShortcut: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, marginBottom: 24, borderWidth: 1 },
+    shortcutIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    shortcutTitle: { fontSize: 16, fontWeight: 'bold' },
+    shortcutSubtitle: { fontSize: 12, marginTop: 2 },
 });

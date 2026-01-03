@@ -10,6 +10,7 @@ import {
     Briefcase,
     ShieldAlert,
     Fingerprint,
+    Wallet,
 } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -32,6 +33,7 @@ import { TemplateEditorScreen } from '../screens/Settings/TemplateEditorScreen';
 import { ExpenseFormScreen } from '../screens/Expenses/ExpenseFormScreen';
 import { Button } from '../components/common';
 import { t } from '../i18n';
+import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -100,25 +102,46 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
 }
 
 import { ContractDetailScreen } from '../screens/Contracts/ContractDetailScreen';
+import { FaturatScreen } from '../screens/Invoices/FaturatScreen';
 
 function InvoicesStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="FaturatMain" component={FaturatScreen} />
             <Stack.Screen name="InvoicesList" component={InvoicesScreen} />
             <Stack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
             <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
             <Stack.Screen name="ContractForm" component={ContractFormScreen} />
             <Stack.Screen name="ContractDetail" component={ContractDetailScreen} />
+            <Stack.Screen name="ReportPreview" component={ReportPreviewScreen} />
         </Stack.Navigator>
     );
 }
 
+import { ReportPreviewScreen } from '../screens/Reports/ReportPreviewScreen';
+
+import { ManagementDashboardScreen } from '../screens/Management/ManagementDashboardScreen';
+
 function ManagementStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="ManagementDashboard" component={ManagementDashboardScreen} />
             <Stack.Screen name="ManagementTabs" component={ManagementScreen} />
             <Stack.Screen name="ClientForm" component={ClientFormScreen} />
             <Stack.Screen name="ProductForm" component={ProductFormScreen} />
+            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+        </Stack.Navigator>
+    );
+}
+
+import { ExpensesDashboardScreen } from '../screens/Expenses/ExpensesDashboardScreen';
+import { ExpensesListScreen } from '../screens/Expenses/ExpensesListScreen';
+
+function ExpensesStack() {
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="ExpensesDashboard" component={ExpensesDashboardScreen} />
+            <Stack.Screen name="ExpensesList" component={ExpensesListScreen} />
             <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
         </Stack.Navigator>
     );
@@ -147,8 +170,8 @@ function MainTabs() {
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={22} />, tabBarLabel: t('dashboard', language) }} />
             <Tab.Screen name="InvoicesTab" component={InvoicesStack} options={{ tabBarIcon: ({ color }) => <FileText color={color} size={22} />, tabBarLabel: t('invoices', language) }} />
-            <Tab.Screen name="Management" component={ManagementStack} options={{ tabBarIcon: ({ color }) => <Briefcase color={color} size={22} />, tabBarLabel: t('products', language) }} />
-            <Tab.Screen name="Settings" component={SettingsStack} options={{ tabBarIcon: ({ color }) => <Settings color={color} size={22} />, tabBarLabel: t('settings', language) }} />
+            <Tab.Screen name="Management" component={ManagementStack} options={{ tabBarIcon: ({ color }) => <Briefcase color={color} size={22} />, tabBarLabel: t('management', language) }} />
+            <Tab.Screen name="ExpensesTab" component={ExpensesStack} options={{ tabBarIcon: ({ color }) => <Wallet color={color} size={22} />, tabBarLabel: t('expenses', language) }} />
         </Tab.Navigator>
     );
 }
@@ -158,6 +181,8 @@ function RootStack() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="QRScanner" component={QRScannerScreen} />
+            <Stack.Screen name="Settings" component={SettingsStack} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
         </Stack.Navigator>
     );
 }
@@ -165,6 +190,7 @@ function RootStack() {
 import { ContractTemplatesScreen } from '../screens/Settings/Contracts/ContractTemplatesScreen';
 import { ContractTemplateEditorScreen } from '../screens/Settings/Contracts/ContractTemplateEditorScreen';
 import { InvoiceTemplateSettingsScreen } from '../screens/Settings/Templates/InvoiceTemplateSettingsScreen';
+import { PaymentIntegrationsScreen } from '../screens/Settings/PaymentIntegrationsScreen';
 
 function SettingsStack() {
     return (
@@ -174,9 +200,13 @@ function SettingsStack() {
             <Stack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
             <Stack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
             <Stack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
+            <Stack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
+            <Stack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
         </Stack.Navigator>
     );
 }
+
+import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
 
 function AuthStack() {
     return (

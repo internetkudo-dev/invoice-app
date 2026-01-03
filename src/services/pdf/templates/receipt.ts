@@ -138,6 +138,15 @@ export function receiptTemplate(data: InvoiceData): string {
 
   ${details.notes ? `<div class="divider"></div><div class="center" style="font-size: 9px;">${details.notes}</div>` : ''}
 
+  ${(company.paymentLinkStripe || company.paymentLinkPaypal) ? `
+    <div class="divider"></div>
+    <div class="center" style="margin-top: 10px;">
+        <div class="bold" style="font-size: 10px; margin-bottom: 5px;">${t.payNow || 'PAY ONLINE'}:</div>
+        ${company.paymentLinkStripe ? `<a href="${company.paymentLinkStripe}" style="display: block; background: #635bff; color: #fff; text-decoration: none; padding: 8px; border-radius: 4px; margin-bottom: 5px; font-weight: bold;">STRIPE SECURE</a>` : ''}
+        ${company.paymentLinkPaypal ? `<a href="${company.paymentLinkPaypal}" style="display: block; background: #0070ba; color: #fff; text-decoration: none; padding: 8px; border-radius: 4px; font-weight: bold;">PAYPAL.ME</a>` : ''}
+    </div>
+  ` : ''}
+
   <div class="footer center">
     <div class="bold">THANK YOU FOR YOUR BUSINESS!</div>
     <div>Printed on: ${new Date().toLocaleString()}</div>

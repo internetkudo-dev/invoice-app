@@ -25,6 +25,7 @@ export interface Profile {
     terms_conditions?: string;
     biometric_enabled?: boolean;
     company_id?: string;
+    active_company_id?: string;
     role?: 'owner' | 'admin' | 'worker';
     template_config?: TemplateConfig;
     smtp_host?: string;
@@ -49,7 +50,7 @@ export interface TemplateConfig {
         price: boolean;
     };
     labels: Record<string, string>;
-    pageSize: 'A4' | 'A5';
+    pageSize: 'A4' | 'A5' | 'Receipt';
 }
 
 export interface Client {
@@ -105,7 +106,8 @@ export interface Expense {
     type?: 'expense' | 'income';
 }
 
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue';
+export type InvoiceStatus = 'draft' | 'sent' | 'pending' | 'paid' | 'overdue' | 'cancelled';
+export type PaymentMethod = 'cash' | 'bank' | 'card';
 
 export interface Invoice {
     id: string;
@@ -125,9 +127,12 @@ export interface Invoice {
     notes?: string;
     template_id: string;
     // New fields
-    is_recurring?: boolean;
     recurring_interval?: 'monthly' | 'yearly';
     last_recurring_date?: string;
+    payment_method?: PaymentMethod;
+    amount_received?: number;
+    change_amount?: number;
+    paper_size?: 'A4' | 'A5' | 'Receipt';
     created_at: string;
     client?: Client;
     items?: InvoiceItem[];
@@ -216,6 +221,9 @@ export interface InvoiceData {
         buyerSignatureUrl?: string;
         type?: 'invoice' | 'offer';
         showBuyerSignature?: boolean;
+        paymentMethod?: PaymentMethod;
+        amountReceived?: number;
+        changeAmount?: number;
     };
     items: Array<{
         description: string;
@@ -229,8 +237,47 @@ export interface InvoiceData {
         tax: number;
         discount: number;
         total: number;
+        amountReceived?: number;
+        changeAmount?: number;
     };
     config?: TemplateConfig;
 }
 
 export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative' | 'receipt';
+
+export interface Company {
+    id: string;
+    company_name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    website?: string;
+    logo_url?: string;
+    signature_url?: string;
+    stamp_url?: string;
+    currency: string;
+    tax_rate: number;
+    tax_name: string;
+    tax_id?: string;
+    bank_name?: string;
+    bank_account?: string;
+    bank_iban?: string;
+    bank_swift?: string;
+    payment_link_stripe?: string;
+    payment_link_paypal?: string;
+    invoice_language?: string;
+    terms_conditions?: string;
+    primary_color: string;
+    is_grayscale: boolean;
+    template_config?: TemplateConfig;
+    created_at: string;
+}
+
+export interface Membership {
+    id: string;
+    user_id: string;
+    company_id: string;
+    role: 'owner' | 'admin' | 'worker';
+    created_at: string;
+    company?: Company;
+}

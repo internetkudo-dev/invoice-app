@@ -55,7 +55,23 @@ export function ContractFormScreen({ navigation, route }: ContractFormScreenProp
 
     useEffect(() => {
         fetchClients();
-    }, []);
+        const subtype = route.params?.subtype;
+        if (subtype) {
+            const foundType = CONTRACT_TYPES.find(t => t.id === subtype || (subtype === 'employment' && t.id === 'employment') || (subtype === 'collaboration' && t.id === 'service_agreement'));
+            if (foundType) {
+                setType(foundType.id);
+                setTitle(`${foundType.label} - ${new Date().toLocaleDateString()}`);
+                setStep(1);
+            } else if (subtype === 'employment' || subtype === 'collaboration' || subtype === 'nda') {
+                // Map or add if missing
+                const label = subtype === 'employment' ? 'Employment Contract' : subtype === 'collaboration' ? 'Collaboration Contract' : 'NDA';
+                const id = subtype === 'nda' ? 'nda' : subtype === 'employment' ? 'employment' : 'service_agreement';
+                setType(id);
+                setTitle(`${label} - ${new Date().toLocaleDateString()}`);
+                setStep(1);
+            }
+        }
+    }, [route.params?.subtype]);
 
     const fetchClients = async () => {
         if (!user) return;

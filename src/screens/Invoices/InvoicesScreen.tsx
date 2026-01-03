@@ -74,7 +74,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profileData) setProfile(profileData);
 
-        const companyId = profileData?.company_id || user.id;
+        const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
 
         let data = [];
 
