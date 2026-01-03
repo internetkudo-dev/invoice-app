@@ -5,6 +5,7 @@ import {
     minimalistTemplate,
     corporateTemplate,
     creativeTemplate,
+    receiptTemplate,
 } from './templates';
 
 export const templateInfo: Record<TemplateType, { name: string; description: string }> = {
@@ -28,6 +29,10 @@ export const templateInfo: Record<TemplateType, { name: string; description: str
         name: 'Creative',
         description: 'Bold colors and unique layout',
     },
+    receipt: {
+        name: 'Receipt',
+        description: '80mm Thermal printer optimized format',
+    },
 };
 
 export const generateInvoiceHtml = (
@@ -43,6 +48,8 @@ export const generateInvoiceHtml = (
             return corporateTemplate(data);
         case 'creative':
             return creativeTemplate(data);
+        case 'receipt':
+            return receiptTemplate(data);
         case 'classic':
         default:
             return classicTemplate(data);

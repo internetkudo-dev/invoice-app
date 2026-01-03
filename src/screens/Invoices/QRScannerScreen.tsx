@@ -9,13 +9,16 @@ import { Button } from '../../components/common';
 
 interface QRScannerScreenProps {
     navigation: any;
+    route: any;
 }
 
-export function QRScannerScreen({ navigation }: QRScannerScreenProps) {
+export function QRScannerScreen({ navigation, route }: QRScannerScreenProps) {
     const { user } = useAuth();
     const { isDark } = useTheme();
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+
+    const mode = route.params?.mode || 'invoice'; // 'invoice' or 'generic'
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -23,6 +26,31 @@ export function QRScannerScreen({ navigation }: QRScannerScreenProps) {
     const handleBarCodeScanned = async ({ data }: { data: string }) => {
         if (scanned) return;
         setScanned(true);
+
+        if (mode === 'generic') {
+            const returnTo = route.params?.returnTo;
+            if (returnTo === 'ProductForm') {
+                navigation.navigate('MainTabs', {
+                    screen: 'Management',
+                    params: {
+                        screen: 'ProductForm',
+                        params: {
+                            scannedSKU: data,
+                            restoredData: route.params?.currentData
+                        },
+                        merge: true,
+                    },
+                    merge: true,
+                });
+            } else {
+                navigation.navigate(returnTo || 'MainTabs', {
+                    scannedSKU: data,
+                    restoredData: route.params?.currentData,
+                    merge: true
+                });
+            }
+            return;
+        }
 
         // Expected format: INVOICE:001-02-01-2026
         if (data.startsWith('INVOICE:')) {
@@ -37,7 +65,13 @@ export function QRScannerScreen({ navigation }: QRScannerScreenProps) {
                 .single();
 
             if (invoice) {
-                navigation.navigate('InvoiceDetail', { invoiceId: invoice.id });
+                navigation.navigate('MainTabs', {
+                    screen: 'InvoicesTab',
+                    params: {
+                        screen: 'InvoiceDetail',
+                        params: { invoiceId: invoice.id }
+                    }
+                });
             } else {
                 Alert.alert('Not Found', `Invoice ${invoiceNumber} not found`, [
                     { text: 'Scan Again', onPress: () => setScanned(false) },
@@ -76,46 +110,42 @@ export function QRScannerScreen({ navigation }: QRScannerScreenProps) {
         );
     }
 
-    return (
-        <View style={styles.container}>
-            <CameraView
-                style={StyleSheet.absoluteFillObject}
-                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            />
-
-            {/* Overlay */}
-            <View style={styles.overlay}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <ArrowLeft color="#fff" size={24} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Scan Invoice QR</Text>
-                    <View style={{ width: 40 }} />
-                </View>
-
-                <View style={styles.scanArea}>
-                    <View style={styles.scanFrame}>
-                        <View style={[styles.corner, styles.cornerTL]} />
-                        <View style={[styles.corner, styles.cornerTR]} />
-                        <View style={[styles.corner, styles.cornerBL]} />
-                        <View style={[styles.corner, styles.cornerBR]} />
-                    </View>
-                </View>
-
-                <View style={styles.footer}>
-                    <Text style={styles.instruction}>
-                        Position the QR code within the frame to scan
-                    </Text>
-                    {scanned && (
-                        <TouchableOpacity style={styles.rescanButton} onPress={() => setScanned(false)}>
-                            <Text style={styles.rescanText}>Tap to Scan Again</Text>
-                        </TouchableOpacity>
-                    )}
+    return (<View style={styles.container}>
+        <CameraView
+            style={StyleSheet.absoluteFillObject}
+            barcodeScannerSettings={{
+                barcodeTypes: mode === 'invoice' ? ['qr'] : ['qr', 'ean13', 'ean8', 'code128', 'upc_a', 'upc_e']
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
+        <View style={styles.overlay}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ArrowLeft color="#fff" size={24} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>{mode === 'invoice' ? 'Scan Invoice QR' : 'Scan Barcode'}</Text>
+                <View style={{ width: 40 }} />
+            </View>
+            <View style={styles.scanArea}>
+                <View style={styles.scanFrame}>
+                    <View style={[styles.corner, styles.cornerTL]} />
+                    <View style={[styles.corner, styles.cornerTR]} />
+                    <View style={[styles.corner, styles.cornerBL]} />
+                    <View style={[styles.corner, styles.cornerBR]} />
                 </View>
             </View>
+            <View style={styles.footer}>
+                <Text style={styles.instruction}>
+                    Position the code within the frame to scan
+                </Text>
+                {scanned && (
+                    <TouchableOpacity style={styles.rescanButton} onPress={() => setScanned(false)}>
+                        <Text style={styles.rescanText}>Tap to Scan Again</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
         </View>
-    );
+    </View>);
 }
 
 const styles = StyleSheet.create({

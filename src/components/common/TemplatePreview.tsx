@@ -14,6 +14,7 @@ const templateStyles: Record<TemplateType, { primary: string; secondary: string;
     minimalist: { primary: '#0f172a', secondary: '#64748b', accent: '#cbd5e1' },
     corporate: { primary: '#1e3a5f', secondary: '#2563eb', accent: '#3b82f6' },
     creative: { primary: '#ec4899', secondary: '#8b5cf6', accent: '#f472b6' },
+    receipt: { primary: '#000000', secondary: '#333333', accent: '#666666' },
 };
 
 const templateNames: Record<TemplateType, string> = {
@@ -22,6 +23,7 @@ const templateNames: Record<TemplateType, string> = {
     minimalist: 'Minimalist',
     corporate: 'Corporate',
     creative: 'Creative',
+    receipt: 'Receipt',
 };
 
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {

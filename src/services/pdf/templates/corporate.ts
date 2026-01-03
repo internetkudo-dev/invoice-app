@@ -1,9 +1,21 @@
 import { InvoiceData } from '../../../types';
+import { pdfTranslations } from '../translations';
 
 export function corporateTemplate(data: InvoiceData): string {
-    const { company, client, details, items, summary } = data;
+  const { company, client, details, items, summary } = data;
+  const lang = details.language || 'en';
+  const t = pdfTranslations[lang] || pdfTranslations.en;
 
-    return `
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat(lang === 'sq' ? 'sq-AL' : lang === 'de' ? 'de-DE' : 'en-US', {
+      style: 'currency',
+      currency: details.currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -16,6 +28,7 @@ export function corporateTemplate(data: InvoiceData): string {
       font-size: 13px;
       color: #1a1a1a;
       line-height: 1.5;
+      ${company.isGrayscale ? 'filter: grayscale(100%);' : ''}
     }
     .header-bar {
       background: #0f172a;
@@ -96,19 +109,33 @@ export function corporateTemplate(data: InvoiceData): string {
       justify-content: space-between;
       align-items: flex-start;
     }
-    .notes {
+    .extra-info {
       flex: 1;
       max-width: 350px;
+    }
+    .notes-box {
       background: #f8fafc;
       padding: 20px;
       border-radius: 4px;
+      margin-bottom: 20px;
     }
-    .notes h4 {
+    .notes-box h4 {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 1px;
       color: #64748b;
       margin-bottom: 10px;
+    }
+    .pay-button { 
+        display: inline-block; 
+        padding: 10px 20px; 
+        border: 1px solid #0f172a;
+        border-radius: 4px; 
+        text-decoration: none; 
+        font-weight: bold; 
+        font-size: 12px; 
+        margin-right: 10px;
+        color: #0f172a;
     }
     .summary-box {
       width: 300px;
@@ -153,13 +180,21 @@ export function corporateTemplate(data: InvoiceData): string {
       border-top: 1px solid #e2e8f0;
       padding-top: 10px;
     }
+    .bank-bar {
+        margin-top: 40px;
+        padding: 20px;
+        background: #f8fafc;
+        border-top: 2px solid #0f172a;
+        display: flex;
+        justify-content: space-around;
+        font-size: 11px;
+    }
     .footer {
-      background: #f8fafc;
+      background: #0f172a;
       padding: 20px 40px;
       text-align: center;
-      color: #64748b;
+      color: #94a3b8;
       font-size: 12px;
-      margin-top: 40px;
     }
   </style>
 </head>
@@ -169,7 +204,7 @@ export function corporateTemplate(data: InvoiceData): string {
       ${company.logoUrl ? `<img src="${company.logoUrl}" class="logo" alt="">` : `<div class="company-name">${company.name}</div>`}
     </div>
     <div class="header-right">
-      <h1>INVOICE</h1>
+      <h1>${details.type === 'offer' ? (t.offer || 'OFFER') : t.invoice}</h1>
       <p>${details.number}</p>
     </div>
   </div>
@@ -177,20 +212,15 @@ export function corporateTemplate(data: InvoiceData): string {
   <div class="content">
     <div class="info-grid">
       <div class="info-box">
-        <h3>From</h3>
-        <p><strong>${company.name}</strong></p>
-        <p>${company.address}</p>
-      </div>
-      <div class="info-box">
-        <h3>Bill To</h3>
+        <h3>${t.billTo}</h3>
         <p><strong>${client.name}</strong></p>
         <p>${client.address}</p>
         <p>${client.email}</p>
       </div>
       <div class="info-box">
-        <h3>Invoice Details</h3>
-        <p><strong>Date:</strong> ${details.issueDate}</p>
-        <p><strong>Due:</strong> ${details.dueDate || 'On Receipt'}</p>
+        <h3>${t.details}</h3>
+        <p><strong>${t.date}:</strong> ${details.issueDate}</p>
+        <p><strong>${details.type === 'offer' ? (t.validUntil || 'VALID UNTIL') : t.due}:</strong> ${details.dueDate || 'On Receipt'}</p>
         <p><strong>Currency:</strong> ${details.currency}</p>
       </div>
     </div>
@@ -198,56 +228,90 @@ export function corporateTemplate(data: InvoiceData): string {
     <table>
       <thead>
         <tr>
-          <th>Description</th>
-          <th>Quantity</th>
-          <th>Unit Price</th>
-          <th>Amount</th>
+          <th>${t.description}</th>
+          <th>${t.qty}</th>
+          <th>${t.price}</th>
+          <th>${t.total}</th>
         </tr>
       </thead>
       <tbody>
         ${items.map(item => `
           <tr>
             <td>${item.description}</td>
-            <td>${item.quantity}</td>
-            <td>${details.currency} ${item.price.toFixed(2)}</td>
-            <td>${details.currency} ${item.total.toFixed(2)}</td>
+            <td>${item.quantity} ${item.unit || ''}</td>
+            <td>${formatCurrency(item.price)}</td>
+            <td>${formatCurrency(item.total)}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
 
     <div class="summary-section">
-      <div class="notes">
-        <h4>Payment Information</h4>
-        <p>Please make payment within the due date specified above.</p>
+      <div class="extra-info">
+        ${(company.paymentLinkStripe || company.paymentLinkPaypal) ? `
+            <div style="margin-bottom: 25px;">
+                <h4 style="font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 12px;">${t.payNow}</h4>
+                ${company.paymentLinkStripe ? `<a href="${company.paymentLinkStripe}" class="pay-button">Stripe Secure</a>` : ''}
+                ${company.paymentLinkPaypal ? `<a href="${company.paymentLinkPaypal}" class="pay-button">PayPal.me</a>` : ''}
+            </div>
+        ` : ''}
+
+        ${details.notes ? `
+            <div class="notes-box">
+                <h4>Notes</h4>
+                <p style="color: #475569;">${details.notes}</p>
+            </div>
+        ` : ''}
+
+        ${details.terms ? `
+            <div class="notes-box">
+                <h4>${t.terms}</h4>
+                <p style="color: #475569; font-size: 11px;">${details.terms}</p>
+            </div>
+        ` : ''}
       </div>
+
       <div class="summary-box">
         <div class="summary-row">
-          <span>Subtotal</span>
-          <span>${details.currency} ${summary.subtotal.toFixed(2)}</span>
+          <span>${t.subtotal}</span>
+          <span>${formatCurrency(summary.subtotal)}</span>
         </div>
         <div class="summary-row">
-          <span>Tax</span>
-          <span>${details.currency} ${summary.tax.toFixed(2)}</span>
+          <span>${t.tax}</span>
+          <span>${formatCurrency(summary.tax)}</span>
         </div>
         ${summary.discount > 0 ? `
         <div class="summary-row">
-          <span>Discount</span>
-          <span>-${details.currency} ${summary.discount.toFixed(2)}</span>
+          <span>${t.discount}</span>
+          <span>-${formatCurrency(summary.discount)}</span>
         </div>
         ` : ''}
         <div class="summary-row">
-          <span>Total Due</span>
-          <span>${details.currency} ${summary.total.toFixed(2)}</span>
+          <span>${t.totalDue}</span>
+          <span>${formatCurrency(summary.total)}</span>
         </div>
       </div>
     </div>
+
+    ${(company.bankName || company.bankIban) ? `
+    <div class="bank-bar">
+        ${company.bankName ? `<div><strong>${t.bank}:</strong> ${company.bankName}</div>` : ''}
+        ${company.bankIban ? `<div><strong>${t.iban}:</strong> ${company.bankIban}</div>` : ''}
+        ${company.bankSwift ? `<div><strong>${t.swift}:</strong> ${company.bankSwift}</div>` : ''}
+    </div>
+    ` : ''}
 
     <div class="signatures">
       ${company.signatureUrl ? `
       <div class="signature-box">
         <img src="${company.signatureUrl}" alt="">
-        <div class="signature-label">Authorized Signature</div>
+        <div class="signature-label">${t.signature || 'Seller'}</div>
+      </div>
+      ` : ''}
+      ${(details.showBuyerSignature && details.buyerSignatureUrl) ? `
+      <div class="signature-box">
+        <img src="${details.buyerSignatureUrl}" alt="">
+        <div class="signature-label">${t.buyerSignature || 'Buyer'}</div>
       </div>
       ` : ''}
       ${company.stampUrl ? `

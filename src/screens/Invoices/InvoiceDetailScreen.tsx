@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as MailComposer from 'expo-mail-composer';
 import {
     View,
     Text,
@@ -8,37 +9,41 @@ import {
     ActivityIndicator,
     StyleSheet,
 } from 'react-native';
-import { ArrowLeft, Share2, Printer, Check, Edit, FileText } from 'lucide-react-native';
+import { ArrowLeft, Edit, Share2, FileText, Check, Trash2, Eye, RefreshCw, Mail } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, StatusBadge, TemplatePreview } from '../../components/common';
 import { Invoice, InvoiceItem, TemplateType, InvoiceData, Profile } from '../../types';
 import { generatePdf, sharePdf, printPdf } from '../../services/pdf/pdfService';
+import { formatCurrency } from '../../utils/format';
 
 interface InvoiceDetailScreenProps {
     navigation: any;
     route: any;
 }
 
-const templates: TemplateType[] = ['classic', 'modern', 'minimalist', 'corporate', 'creative'];
+const templates: TemplateType[] = ['classic', 'modern', 'minimalist', 'corporate', 'creative', 'receipt'];
 
 export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenProps) {
     const { user } = useAuth();
     const { isDark } = useTheme();
     const invoiceId = route.params?.invoiceId;
+    const autoPreview = route.params?.autoPreview;
 
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('modern');
     const [generating, setGenerating] = useState(false);
+    const [sending, setSending] = useState(false);
     const [pdfUri, setPdfUri] = useState<string | null>(null);
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const primaryColor = profile?.primary_color || '#818cf8';
 
     useEffect(() => {
         fetchData();
@@ -65,14 +70,11 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (itemsData) setItems(itemsData);
     };
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: profile?.currency || 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
+    useEffect(() => {
+        if (invoice && profile && autoPreview) {
+            handlePrint();
+        }
+    }, [invoice, profile]);
 
     const buildInvoiceData = (): InvoiceData | null => {
         if (!invoice || !profile) return null;
@@ -93,21 +95,30 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 bankAccount: profile.bank_account,
                 bankIban: profile.bank_iban,
                 bankSwift: profile.bank_swift,
+                primaryColor: profile.primary_color,
+                isGrayscale: profile.is_grayscale,
+                paymentLinkStripe: profile.payment_link_stripe,
+                paymentLinkPaypal: profile.payment_link_paypal,
             },
             client: {
                 name: client?.name || 'Client',
-                address: client?.address || '',
+                address: [client?.address, client?.city, client?.zip_code, client?.country].filter(Boolean).join(', ') || '',
                 email: client?.email || '',
             },
             details: {
                 number: invoice.invoice_number,
                 issueDate: invoice.issue_date,
                 dueDate: invoice.due_date || '',
-                currency: profile.currency || 'USD',
+                currency: profile.currency || 'EUR',
+                language: profile.invoice_language || 'en',
+                notes: invoice.notes,
+                terms: profile.terms_conditions,
+                buyerSignatureUrl: invoice.buyer_signature_url,
             },
             items: items.map((item) => ({
                 description: item.description,
                 quantity: Number(item.quantity),
+                unit: item.unit,
                 price: Number(item.unit_price),
                 total: Number(item.amount),
             })),
@@ -117,6 +128,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 discount: Number(invoice.discount_amount) || 0,
                 total: Number(invoice.total_amount),
             },
+            config: profile.template_config,
         };
     };
 
@@ -124,7 +136,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) { Alert.alert('Error', 'Unable to generate PDF'); return; }
 
-        // Save selected template to invoice
         await supabase.from('invoices').update({ template_id: selectedTemplate }).eq('id', invoiceId);
 
         setGenerating(true);
@@ -139,9 +150,51 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         }
     };
 
+    const handleSendEmail = async () => {
+        const clientEmail = (invoice as any).client?.email;
+        if (!clientEmail) {
+            Alert.alert('No Client Email', 'This client does not have an email address.');
+            return;
+        }
+
+        setSending(true);
+        try {
+            const isAvailable = await MailComposer.isAvailableAsync();
+            if (!isAvailable) {
+                Alert.alert('Error', 'Email composition is not available on this device');
+                return;
+            }
+
+            const data = buildInvoiceData();
+            if (!data) return;
+
+            // 1. Generate PDF
+            const pdfResult = await generatePdf(data, selectedTemplate);
+            if (!pdfResult.success || !pdfResult.uri) throw new Error('Failed to generate PDF');
+
+            // 2. Open Native Mail Composer
+            const status = await MailComposer.composeAsync({
+                recipients: [clientEmail],
+                subject: `Invoice ${invoice?.invoice_number} from ${profile?.company_name}`,
+                body: `Dear ${(invoice as any).client?.name},\n\nPlease find attached invoice ${invoice?.invoice_number}.\n\nBest regards,\n${profile?.company_name}`,
+                attachments: [pdfResult.uri],
+                isHtml: false,
+            });
+
+            if (status.status === 'sent') {
+                Alert.alert('Success', 'Email marked as sent');
+            }
+
+        } catch (error: any) {
+            Alert.alert('Error', 'Failed to compose email: ' + error.message);
+        } finally {
+            setSending(false);
+        }
+    };
+
     const handleShare = async () => {
         const data = buildInvoiceData();
-        if (!data) { await handleGeneratePdf(); return; }
+        if (!data) return;
 
         setGenerating(true);
         const result = await generatePdf(data, selectedTemplate);
@@ -155,18 +208,85 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
     const handlePrint = async () => {
         const data = buildInvoiceData();
-        if (!data) { Alert.alert('Error', 'Unable to print'); return; }
+        if (!data) return;
 
         setGenerating(true);
         const success = await printPdf(data, selectedTemplate);
         setGenerating(false);
 
-        if (!success) Alert.alert('Error', 'Failed to print');
+        if (!success) Alert.alert('Error', 'Failed to show preview');
     };
 
     const handleUpdateStatus = async (status: string) => {
-        await supabase.from('invoices').update({ status }).eq('id', invoiceId);
-        fetchData();
+        if (!invoice) return;
+        const { error } = await supabase.from('invoices').update({ status }).eq('id', invoice.id);
+        if (!error) setInvoice({ ...invoice, status: status as any });
+    };
+
+    const handleTransformToInvoice = async () => {
+        if (!invoice) return;
+        Alert.alert(
+            'Convert to Invoice',
+            'Do you want to transform this offer into a formal invoice?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Convert',
+                    onPress: async () => {
+                        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user?.id).single();
+                        const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user?.id).eq('type', 'invoice');
+
+                        const nextNumber = (count || 0) + 1;
+                        const today = new Date();
+                        const dd = String(today.getDate()).padStart(2, '0');
+                        const mm = String(today.getMonth() + 1).padStart(2, '0');
+                        const yyyy = today.getFullYear();
+                        const newInvoiceNumber = `INV-${String(nextNumber).padStart(3, '0')}-${dd}-${mm}-${yyyy}`;
+
+                        const { error } = await supabase
+                            .from('invoices')
+                            .update({
+                                type: 'invoice',
+                                invoice_number: newInvoiceNumber,
+                                status: 'draft'
+                            })
+                            .eq('id', invoice.id);
+
+                        if (!error) {
+                            Alert.alert('Success', `Transformed into Invoice ${newInvoiceNumber}`);
+                            fetchData();
+                        } else {
+                            Alert.alert('Error', 'Failed to transform offer');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleDelete = async () => {
+        if (!invoice) return;
+        Alert.alert(
+            'Delete Invoice',
+            'Are you sure you want to delete this invoice? This action cannot be undone.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await supabase.from('invoice_items').delete().eq('invoice_id', invoice.id);
+                            const { error } = await supabase.from('invoices').delete().eq('id', invoice.id);
+                            if (error) throw error;
+                            navigation.goBack();
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to delete invoice');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     if (!invoice) {
@@ -189,12 +309,33 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                         <Text style={[styles.subtitle, { color: mutedColor }]}>{(invoice as any).client?.name || 'No client'}</Text>
                     </View>
                 </View>
-                <TouchableOpacity
-                    style={[styles.editButton, { backgroundColor: cardBg }]}
-                    onPress={() => navigation.navigate('InvoiceForm', { invoiceId: invoice.id })}
-                >
-                    <Edit color="#818cf8" size={18} />
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    {invoice.type === 'offer' && (
+                        <TouchableOpacity
+                            style={[styles.transformButton, { backgroundColor: primaryColor }]}
+                            onPress={handleTransformToInvoice}
+                        >
+                            <RefreshCw color="#fff" size={16} />
+                            <Text style={styles.transformText}>CONVERT</Text>
+                        </TouchableOpacity>
+                    )}
+                    {profile?.role !== 'worker' && (
+                        <>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: '#fee2e2', marginRight: 8 }]}
+                                onPress={handleDelete}
+                            >
+                                <Trash2 color="#ef4444" size={18} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.editButton, { backgroundColor: `${primaryColor}20` }]}
+                                onPress={() => navigation.navigate('InvoiceForm', { invoiceId: invoice.id })}
+                            >
+                                <Edit color={primaryColor} size={18} />
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -202,7 +343,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 <Card style={styles.statusCard}>
                     <View style={styles.statusCardHeader}>
                         <StatusBadge status={invoice.status} />
-                        <Text style={[styles.totalAmount, { color: '#818cf8' }]}>{formatCurrency(Number(invoice.total_amount))}</Text>
+                        <Text style={[styles.totalAmount, { color: '#818cf8' }]}>{formatCurrency(Number(invoice.total_amount), profile?.currency)}</Text>
                     </View>
                     <View style={styles.statusCardDates}>
                         <View style={styles.dateBox}>
@@ -233,7 +374,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     ))}
                 </View>
 
-                {/* Template Selection with Previews */}
+                {/* Template Selection */}
                 <Text style={[styles.sectionTitle, { color: textColor }]}>Choose Template</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templateScroll} contentContainerStyle={styles.templateScrollContent}>
                     {templates.map((template) => (
@@ -251,10 +392,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             <View style={styles.itemInfo}>
                                 <Text style={[styles.itemName, { color: textColor }]}>{item.description}</Text>
                                 <Text style={[styles.itemMeta, { color: mutedColor }]}>
-                                    {item.quantity} × {formatCurrency(Number(item.unit_price))}
+                                    {item.quantity} × {formatCurrency(Number(item.unit_price), profile?.currency)}
                                 </Text>
                             </View>
-                            <Text style={styles.itemAmount}>{formatCurrency(Number(item.amount))}</Text>
+                            <Text style={styles.itemAmount}>{formatCurrency(Number(item.amount), profile?.currency)}</Text>
                         </View>
                     ))}
 
@@ -262,45 +403,82 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                         <View style={styles.summaryRow}>
                             <Text style={[styles.summaryLabel, { color: mutedColor }]}>Subtotal</Text>
                             <Text style={[styles.summaryValue, { color: textColor }]}>
-                                {formatCurrency(items.reduce((sum, item) => sum + Number(item.amount), 0))}
+                                {formatCurrency(items.reduce((sum, item) => sum + Number(item.amount), 0), profile?.currency)}
                             </Text>
                         </View>
                         {Number(invoice.tax_amount) > 0 && (
                             <View style={styles.summaryRow}>
                                 <Text style={[styles.summaryLabel, { color: mutedColor }]}>Tax</Text>
-                                <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(Number(invoice.tax_amount))}</Text>
+                                <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(Number(invoice.tax_amount), profile?.currency)}</Text>
                             </View>
                         )}
                         {Number(invoice.discount_amount) > 0 && (
                             <View style={styles.summaryRow}>
                                 <Text style={[styles.summaryLabel, { color: mutedColor }]}>Discount</Text>
-                                <Text style={[styles.summaryValue, { color: '#10b981' }]}>-{formatCurrency(Number(invoice.discount_amount))}</Text>
+                                <Text style={[styles.summaryValue, { color: '#10b981' }]}>-{formatCurrency(Number(invoice.discount_amount), profile?.currency)}</Text>
                             </View>
                         )}
                     </View>
                 </Card>
 
+                {/* Signatures Preview */}
+                {
+                    (profile?.signature_url || invoice.buyer_signature_url) && (
+                        <Card style={styles.card}>
+                            <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 16 }]}>Signatures</Text>
+                            <View style={styles.row}>
+                                {profile?.signature_url && (
+                                    <View style={styles.half}>
+                                        <Text style={[styles.dateLabel, { color: mutedColor }]}>Seller</Text>
+                                        <View style={styles.signatureSmallBox}>
+                                            <Eye color={mutedColor} size={20} />
+                                        </View>
+                                    </View>
+                                )}
+                                {invoice.buyer_signature_url && (
+                                    <View style={styles.half}>
+                                        <Text style={[styles.dateLabel, { color: mutedColor }]}>Buyer</Text>
+                                        <View style={styles.signatureSmallBox}>
+                                            <Eye color={mutedColor} size={20} />
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        </Card>
+                    )
+                }
+
                 {/* Action Buttons */}
                 <View style={styles.actions}>
                     <Button
-                        title={generating ? 'Generating...' : 'Generate PDF'}
-                        onPress={handleGeneratePdf}
+                        title={generating ? 'Building Preview...' : 'On-Screen Preview'}
+                        onPress={handlePrint}
+                        icon={Eye}
                         loading={generating}
+                    />
+
+                    <Button
+                        title={sending ? 'Sending Email...' : 'Email Client'}
+                        onPress={handleSendEmail}
+                        icon={Mail}
+                        loading={sending}
+                        variant="primary" // Or different color
+                        style={{ marginTop: 12, backgroundColor: '#f59e0b' }}
                     />
 
                     <View style={styles.secondaryActions}>
                         <TouchableOpacity style={[styles.actionButton, { backgroundColor: cardBg }]} onPress={handleShare}>
                             <Share2 color="#10b981" size={22} />
-                            <Text style={[styles.actionText, { color: '#10b981' }]}>Share</Text>
+                            <Text style={[styles.actionText, { color: '#10b981' }]}>Share PDF</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: cardBg }]} onPress={handlePrint}>
-                            <Printer color="#3b82f6" size={22} />
-                            <Text style={[styles.actionText, { color: '#3b82f6' }]}>Print</Text>
+                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: cardBg }]} onPress={handleGeneratePdf}>
+                            <FileText color="#818cf8" size={22} />
+                            <Text style={[styles.actionText, { color: '#818cf8' }]}>Export</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-            </ScrollView>
-        </View>
+            </ScrollView >
+        </View >
     );
 }
 
@@ -313,6 +491,8 @@ const styles = StyleSheet.create({
     title: { fontSize: 22, fontWeight: 'bold' },
     subtitle: { fontSize: 14, marginTop: 2 },
     editButton: { padding: 10, borderRadius: 10 },
+    actionBtn: { padding: 10, borderRadius: 10 },
+    headerRight: { flexDirection: 'row', alignItems: 'center' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 40 },
     statusCard: { marginBottom: 20 },
@@ -345,4 +525,10 @@ const styles = StyleSheet.create({
     secondaryActions: { flexDirection: 'row', gap: 12, marginTop: 12 },
     actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#334155' },
     actionText: { fontSize: 15, fontWeight: '600' },
+    transformButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6, marginRight: 8 },
+    transformText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+    row: { flexDirection: 'row', gap: 16 },
+    half: { flex: 1 },
+    tinyLabel: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+    signatureSmallBox: { height: 50, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
 });

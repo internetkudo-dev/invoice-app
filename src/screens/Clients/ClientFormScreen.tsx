@@ -9,7 +9,8 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { ArrowLeft, User, Percent, FileText } from 'lucide-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { ArrowLeft, User, Percent, FileText, MapPin, Globe } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -31,6 +32,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
         email: '',
         phone: '',
         address: '',
+        city: '',
+        zip_code: '',
+        country: '',
         tax_id: '',
         discount_percent: 0,
         notes: '',
@@ -53,6 +57,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             email: data.email || '',
             phone: data.phone || '',
             address: data.address || '',
+            city: data.city || '',
+            zip_code: data.zip_code || '',
+            country: data.country || '',
             tax_id: data.tax_id || '',
             discount_percent: data.discount_percent || 0,
             notes: data.notes || '',
@@ -102,14 +109,39 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
                     <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Client name" />
                     <Input label="Email" value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
                     <Input label="Phone" value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
-                    <Input label="Address" value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
+                </View>
+
+                {/* Address Details */}
+                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                    <View style={styles.sectionHeader}>
+                        <MapPin color="#10b981" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Address Details</Text>
+                    </View>
+                    <Input label="Street Address" value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
+                    <View style={styles.row}>
+                        <View style={styles.halfField}>
+                            <Input label="City" value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder="City" />
+                        </View>
+                        <View style={styles.halfField}>
+                            <Input label="Zip Code" value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder="Zip" keyboardType="number-pad" />
+                        </View>
+                    </View>
+                    <Input label="Country" value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder="Country" />
                 </View>
 
                 {/* Business Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
-                        <FileText color="#10b981" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Business Details</Text>
+                        <Globe color="#10b981" size={20} />
+                        <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={[styles.sectionTitle, { color: textColor }]}>Business Details</Text>
+                            <TouchableOpacity
+                                style={{ backgroundColor: '#10b98120', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                                onPress={() => WebBrowser.openBrowserAsync('https://apps.atk-ks.org/BizPasiveApp/VatRegist/Index')}
+                            >
+                                <Text style={{ color: '#10b981', fontSize: 12, fontWeight: 'bold' }}>Check Registry ↗</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                     <Input label="Tax ID / VAT Number" value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
                 </View>
@@ -166,5 +198,7 @@ const styles = StyleSheet.create({
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600' },
     hintText: { fontSize: 13, marginBottom: 12, lineHeight: 20 },
+    row: { flexDirection: 'row', gap: 12 },
+    halfField: { flex: 1 },
     saveButton: { marginTop: 8 },
 });

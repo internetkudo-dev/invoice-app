@@ -1,20 +1,23 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import {
     TouchableOpacity,
     Text,
     ActivityIndicator,
     StyleSheet,
     ViewStyle,
+    View,
 } from 'react-native';
+import { useTheme } from '../../hooks/useTheme';
 
 interface ButtonProps {
     title: string;
     onPress: () => void;
-    variant?: 'primary' | 'secondary' | 'danger';
+    variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost';
     loading?: boolean;
     disabled?: boolean;
     style?: ViewStyle;
     size?: 'small' | 'medium' | 'large';
+    icon?: any;
 }
 
 export function Button({
@@ -25,22 +28,33 @@ export function Button({
     disabled = false,
     style,
     size = 'medium',
+    icon: Icon,
 }: ButtonProps) {
+    const { primaryColor } = useTheme();
+
     const getButtonStyle = () => {
         switch (variant) {
             case 'secondary':
-                return styles.secondary;
+                return { backgroundColor: `${primaryColor}20` };
             case 'danger':
                 return styles.danger;
+            case 'outline':
+                return [styles.outline, { borderColor: primaryColor }];
+            case 'ghost':
+                return styles.ghost;
             default:
-                return styles.primary;
+                return { backgroundColor: primaryColor };
         }
     };
 
     const getTextStyle = () => {
         switch (variant) {
             case 'secondary':
-                return styles.secondaryText;
+                return { color: primaryColor };
+            case 'outline':
+                return { color: primaryColor };
+            case 'ghost':
+                return { color: primaryColor };
             default:
                 return styles.primaryText;
         }
@@ -57,6 +71,8 @@ export function Button({
         }
     };
 
+    const iconColor = getTextStyle().color;
+
     return (
         <TouchableOpacity
             style={[styles.button, getButtonStyle(), getSizeStyle(), disabled && styles.disabled, style]}
@@ -65,9 +81,12 @@ export function Button({
             activeOpacity={0.7}
         >
             {loading ? (
-                <ActivityIndicator color={variant === 'secondary' ? '#818cf8' : '#fff'} size="small" />
+                <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : primaryColor} size="small" />
             ) : (
-                <Text style={[styles.text, getTextStyle()]}>{title}</Text>
+                <View style={styles.content}>
+                    {Icon && <Icon size={size === 'small' ? 14 : 18} color={iconColor} />}
+                    <Text style={[styles.text, getTextStyle(), { fontSize: size === 'small' ? 13 : 15 }]}>{title}</Text>
+                </View>
             )}
         </TouchableOpacity>
     );
@@ -79,6 +98,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 48,
+    },
+    content: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
     },
     small: {
         paddingVertical: 8,
@@ -95,13 +120,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         minHeight: 56,
     },
-    primary: {
-        backgroundColor: '#6366f1',
-    },
-    secondary: {
+    outline: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: '#334155',
+    },
+    ghost: {
+        backgroundColor: 'transparent',
     },
     danger: {
         backgroundColor: '#ef4444',
@@ -110,13 +134,9 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     text: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontWeight: 'bold',
     },
     primaryText: {
         color: '#fff',
-    },
-    secondaryText: {
-        color: '#818cf8',
     },
 });

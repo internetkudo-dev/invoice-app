@@ -9,33 +9,39 @@ import {
     Dimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { TrendingUp, Clock, CheckCircle, AlertCircle, FileText, Users, Package, QrCode, ChevronRight } from 'lucide-react-native';
+import { Briefcase, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Users, Package, FileText, BarChart2, QrCode, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, StatusBadge } from '../../components/common';
-import { Invoice, Profile, Client } from '../../types';
+import { Card, StatusBadge, Button, FAB } from '../../components/common';
+import { Invoice, Profile, Client, Expense } from '../../types';
+import { formatCurrency } from '../../utils/format';
+import { t } from '../../i18n';
 
 const { width } = Dimensions.get('window');
 
 export function DashboardScreen({ navigation }: any) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const [profile, setProfile] = useState<Profile | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [clients, setClients] = useState<Client[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [monthlyStats, setMonthlyStats] = useState<{ month: string; revenue: number; expenses: number }[]>([]);
+    const [mostSoldProduct, setMostSoldProduct] = useState<{ name: string; quantity: number } | null>(null);
+    const [topClients, setTopClients] = useState<{ name: string; total: number }[]>([]);
+    const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
 
     const [stats, setStats] = useState({
-        total: 0,
+        totalRevenue: 0,
+        totalExpenses: 0,
+        netProfit: 0,
         paid: 0,
         pending: 0,
         overdue: 0,
         invoiceCount: 0,
         clientCount: 0,
         productCount: 0,
-        thisMonth: 0,
-        lastMonth: 0,
+        growth: 0,
     });
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
@@ -53,261 +59,291 @@ export function DashboardScreen({ navigation }: any) {
         if (!user) return;
 
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profileData) setProfile(profileData);
+        if (profileData) {
+            setProfile(profileData);
+            const companyId = profileData.company_id || user.id;
 
-        const { data: invoicesData } = await supabase
-            .from('invoices')
-            .select('*, client:clients(name)')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
+            const { data: invoicesData } = await supabase
+                .from('invoices')
+                .select(`*, client:clients(name), items:invoice_items(*)`)
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .order('created_at', { ascending: false });
 
-        const { data: clientsData } = await supabase.from('clients').select('*').eq('user_id', user.id);
-        const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+            const { data: expensesData } = await supabase
+                .from('expenses')
+                .select('*')
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
 
-        if (clientsData) setClients(clientsData);
+            const { data: clientsData } = await supabase
+                .from('clients')
+                .select('*')
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
 
-        if (invoicesData) {
-            setInvoices(invoicesData);
+            const { data: allProducts } = await supabase
+                .from('products')
+                .select('*')
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
 
-            const total = invoicesData.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-            const paid = invoicesData.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-            const pending = invoicesData.filter((inv) => inv.status === 'sent' || inv.status === 'draft').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-            const overdue = invoicesData.filter((inv) => inv.status === 'overdue').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+            if (allProducts) {
+                const lowStock = allProducts.filter(p => (p as any).track_stock && ((p as any).stock_quantity || 0) <= ((p as any).low_stock_threshold || 5));
+                setLowStockProducts(lowStock);
+            }
 
-            // This month's revenue
-            const now = new Date();
-            const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-            const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-            const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString();
+            if (invoicesData && expensesData) {
+                setInvoices(invoicesData);
 
-            const thisMonth = invoicesData
-                .filter((inv) => inv.status === 'paid' && inv.issue_date >= thisMonthStart.split('T')[0])
-                .reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+                const revenue = (invoicesData as any[]).reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+                const expenses = (expensesData as any[]).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+                const paid = (invoicesData as any[]).filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+                const pending = (invoicesData as any[]).filter((inv) => inv.status === 'sent' || inv.status === 'draft').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+                const overdue = (invoicesData as any[]).filter((inv) => inv.status === 'overdue').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
 
-            const lastMonth = invoicesData
-                .filter((inv) => inv.status === 'paid' && inv.issue_date >= lastMonthStart.split('T')[0] && inv.issue_date <= lastMonthEnd.split('T')[0])
-                .reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+                // Chart data: Last 6 months
+                const monthsNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const last6Months = [];
+                for (let i = 5; i >= 0; i--) {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - i);
+                    const monthIdx = d.getMonth();
+                    const year = d.getFullYear();
 
-            setStats({
-                total,
-                paid,
-                pending,
-                overdue,
-                invoiceCount: invoicesData.length,
-                clientCount: clientsData?.length || 0,
-                productCount: productCount || 0,
-                thisMonth,
-                lastMonth,
-            });
+                    const rev = (invoicesData as any[]).filter(inv => {
+                        const invDate = new Date(inv.issue_date);
+                        return invDate.getMonth() === monthIdx && invDate.getFullYear() === year;
+                    }).reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+
+                    const exp = (expensesData as any[]).filter(e => {
+                        const eDate = new Date(e.date);
+                        return eDate.getMonth() === monthIdx && eDate.getFullYear() === year;
+                    }).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+                    last6Months.push({ month: monthsNames[monthIdx], revenue: rev, expenses: exp });
+                }
+                setMonthlyStats(last6Months);
+
+                // Most sold products
+                const productSales: any = {};
+                (invoicesData as any[]).forEach(inv => {
+                    (inv.items || []).forEach((it: any) => {
+                        productSales[it.description] = (productSales[it.description] || 0) + Number(it.quantity);
+                    });
+                });
+                const sortedProducts = Object.entries(productSales).sort((a: any, b: any) => b[1] - a[1]);
+                if (sortedProducts.length > 0) setMostSoldProduct({ name: sortedProducts[0][0], quantity: sortedProducts[0][1] as number });
+
+                // Top clients
+                const clientSales: any = {};
+                (invoicesData as any[]).forEach(inv => {
+                    const name = inv.client?.name || 'Unknown';
+                    clientSales[name] = (clientSales[name] || 0) + Number(inv.total_amount);
+                });
+                const sortedClients = Object.entries(clientSales).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5);
+                setTopClients(sortedClients.map(c => ({ name: c[0], total: c[1] as number })));
+
+                setStats({
+                    totalRevenue: revenue,
+                    totalExpenses: expenses,
+                    netProfit: revenue - expenses,
+                    paid,
+                    pending,
+                    overdue,
+                    invoiceCount: invoicesData.length,
+                    clientCount: clientsData?.length || 0,
+                    productCount: allProducts?.length || 0,
+                    growth: 12.5, // Placeholder
+                });
+            }
         }
     };
 
-    const onRefresh = async () => {
+    const handleRefresh = async () => {
         setRefreshing(true);
         await fetchData();
         setRefreshing(false);
     };
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: profile?.currency || 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
-
-    const getGrowthPercent = () => {
-        if (stats.lastMonth === 0) return stats.thisMonth > 0 ? 100 : 0;
-        return Math.round(((stats.thisMonth - stats.lastMonth) / stats.lastMonth) * 100);
-    };
-
-    const recentInvoices = invoices.slice(0, 5);
-
-    // Top clients by revenue
-    const topClients = invoices
-        .filter((inv) => inv.status === 'paid')
-        .reduce((acc: any, inv: any) => {
-            const name = inv.client?.name || 'Unknown';
-            acc[name] = (acc[name] || 0) + Number(inv.total_amount);
-            return acc;
-        }, {});
-
-    const topClientsList = Object.entries(topClients)
-        .map(([name, total]) => ({ name, total: total as number }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 3);
+    const maxVal = Math.max(...monthlyStats.map(m => Math.max(m.revenue, m.expenses)), 1);
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
+            <View style={styles.header}>
+                <View>
+                    <Text style={[styles.welcome, { color: mutedColor }]}>{t('welcomeBack', language)},</Text>
+                    <Text style={[styles.companyName, { color: textColor }]}>{profile?.company_name || 'My Business'}</Text>
+                </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={() => navigation.navigate('QRScanner')} style={[styles.profileButton, { backgroundColor: cardBg, marginRight: 8 }]}>
+                        <QrCode color={primaryColor} size={20} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={[styles.profileButton, { backgroundColor: cardBg }]}>
+                        <Briefcase color={primaryColor} size={20} />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />}
             >
-                <View style={styles.headerRow}>
-                    <Text style={[styles.header, { color: textColor }]}>Dashboard</Text>
-                    <TouchableOpacity
-                        style={[styles.scanButton, { backgroundColor: cardBg }]}
-                        onPress={() => navigation.navigate('Invoices', { screen: 'QRScanner' })}
-                    >
-                        <QrCode color="#818cf8" size={22} />
-                    </TouchableOpacity>
+                {/* Stats Grid */}
+                <View style={styles.statsGrid}>
+                    <StatCard title={t('totalRevenue', language)} value={formatCurrency(stats.totalRevenue)} icon={TrendingUp} color="#6366f1" growth={stats.growth} isDark={isDark} />
+                    <StatCard title={t('netProfit', language)} value={formatCurrency(stats.netProfit)} icon={Wallet} color="#10b981" isDark={isDark} />
                 </View>
 
-                {/* Revenue Card */}
-                <Card style={styles.revenueCard}>
-                    <Text style={[styles.revenueLabel, { color: mutedColor }]}>Total Revenue</Text>
-                    <Text style={styles.revenueAmount}>{formatCurrency(stats.total)}</Text>
-                    <View style={styles.revenueRow}>
-                        <View style={styles.revenueChange}>
-                            <Text style={[styles.changeText, { color: getGrowthPercent() >= 0 ? '#10b981' : '#ef4444' }]}>
-                                {getGrowthPercent() >= 0 ? '↑' : '↓'} {Math.abs(getGrowthPercent())}%
-                            </Text>
-                            <Text style={[styles.changeLabel, { color: mutedColor }]}>vs last month</Text>
-                        </View>
-                        <Text style={[styles.thisMonth, { color: '#818cf8' }]}>{formatCurrency(stats.thisMonth)} this month</Text>
+                {/* Performance Chart */}
+                <Card style={styles.chartCard}>
+                    <View style={styles.cardHeader}>
+                        <BarChart2 color={primaryColor} size={20} />
+                        <Text style={[styles.cardTitle, { color: textColor }]}>Performance</Text>
+                    </View>
+                    <View style={styles.chartContainer}>
+                        {monthlyStats.map((m, i) => (
+                            <View key={i} style={styles.chartCol}>
+                                <View style={styles.barContainer}>
+                                    <View style={[styles.bar, { height: (m.revenue / maxVal) * 100, backgroundColor: primaryColor }]} />
+                                    <View style={[styles.bar, { height: (m.expenses / maxVal) * 100, backgroundColor: '#f43f5e', marginLeft: 2 }]} />
+                                </View>
+                                <Text style={[styles.chartLabel, { color: mutedColor }]}>{m.month}</Text>
+                            </View>
+                        ))}
+                    </View>
+                    <View style={styles.chartLegend}>
+                        <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: primaryColor }]} /><Text style={[styles.legendText, { color: mutedColor }]}>{t('totalRevenue', language).split(' ')[1]}</Text></View>
+                        <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: '#f43f5e' }]} /><Text style={[styles.legendText, { color: mutedColor }]}>{t('expenses', language)}</Text></View>
                     </View>
                 </Card>
 
-                {/* Quick Stats */}
-                <View style={styles.quickStats}>
-                    <TouchableOpacity style={[styles.quickStat, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('Invoices')}>
-                        <FileText color="#818cf8" size={24} />
-                        <Text style={[styles.quickStatValue, { color: textColor }]}>{stats.invoiceCount}</Text>
-                        <Text style={[styles.quickStatLabel, { color: mutedColor }]}>Invoices</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.quickStat, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('Clients')}>
-                        <Users color="#10b981" size={24} />
-                        <Text style={[styles.quickStatValue, { color: textColor }]}>{stats.clientCount}</Text>
-                        <Text style={[styles.quickStatLabel, { color: mutedColor }]}>Clients</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.quickStat, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('Products')}>
-                        <Package color="#f59e0b" size={24} />
-                        <Text style={[styles.quickStatValue, { color: textColor }]}>{stats.productCount}</Text>
-                        <Text style={[styles.quickStatLabel, { color: mutedColor }]}>Products</Text>
-                    </TouchableOpacity>
+                {/* Status Section */}
+                <View style={styles.statusRow}>
+                    <StatusItem label={t('paid', language)} value={formatCurrency(stats.paid)} color="#10b981" bgColor="#10b98120" />
+                    <StatusItem label={t('pending', language)} value={formatCurrency(stats.pending)} color="#f59e0b" bgColor="#f59e0b20" />
+                    <StatusItem label={t('overdue', language)} value={formatCurrency(stats.overdue)} color="#ef4444" bgColor="#ef444420" />
                 </View>
 
-                {/* Status Cards */}
-                <View style={styles.statusGrid}>
-                    <View style={[styles.statusCard, { backgroundColor: cardBg }]}>
-                        <View style={[styles.statusIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                            <CheckCircle color="#10b981" size={20} />
+                {/* Low Stock Alerts */}
+                {lowStockProducts.length > 0 && (
+                    <Card style={[styles.alertCard, { backgroundColor: '#fff7ed' }]}>
+                        <View style={styles.row}>
+                            <AlertTriangle color="#f97316" size={20} />
+                            <Text style={styles.alertTitle}>Stock Alert</Text>
                         </View>
-                        <Text style={[styles.statusValue, { color: '#10b981' }]}>{formatCurrency(stats.paid)}</Text>
-                        <Text style={[styles.statusLabel, { color: mutedColor }]}>Paid</Text>
-                    </View>
-                    <View style={[styles.statusCard, { backgroundColor: cardBg }]}>
-                        <View style={[styles.statusIcon, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                            <Clock color="#f59e0b" size={20} />
-                        </View>
-                        <Text style={[styles.statusValue, { color: '#f59e0b' }]}>{formatCurrency(stats.pending)}</Text>
-                        <Text style={[styles.statusLabel, { color: mutedColor }]}>Pending</Text>
-                    </View>
-                    <View style={[styles.statusCard, { backgroundColor: cardBg }]}>
-                        <View style={[styles.statusIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                            <AlertCircle color="#ef4444" size={20} />
-                        </View>
-                        <Text style={[styles.statusValue, { color: '#ef4444' }]}>{formatCurrency(stats.overdue)}</Text>
-                        <Text style={[styles.statusLabel, { color: mutedColor }]}>Overdue</Text>
-                    </View>
-                </View>
-
-                {/* Top Clients */}
-                {topClientsList.length > 0 && (
-                    <>
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Top Clients</Text>
-                        <Card>
-                            {topClientsList.map((client, index) => (
-                                <View key={client.name} style={[styles.topClientRow, index < topClientsList.length - 1 && styles.topClientBorder]}>
-                                    <View style={styles.topClientInfo}>
-                                        <View style={[styles.rankBadge, { backgroundColor: index === 0 ? '#f59e0b' : '#334155' }]}>
-                                            <Text style={styles.rankText}>{index + 1}</Text>
-                                        </View>
-                                        <Text style={[styles.topClientName, { color: textColor }]}>{client.name}</Text>
-                                    </View>
-                                    <Text style={styles.topClientAmount}>{formatCurrency(client.total)}</Text>
-                                </View>
-                            ))}
-                        </Card>
-                    </>
+                        {lowStockProducts.slice(0, 2).map((p, i) => (
+                            <Text key={i} style={styles.alertText}>{p.name}: {p.stock_quantity} remaining</Text>
+                        ))}
+                    </Card>
                 )}
 
                 {/* Recent Invoices */}
-                <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>Recent Invoices</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('Invoices')}>
-                        <Text style={styles.seeAllText}>See All</Text>
+                <View style={[styles.sectionHeader, { marginTop: 16 }]}>
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>{t('invoices', language)}</Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('InvoicesTab')}>
+                        <Text style={{ color: primaryColor, fontWeight: '600' }}>{t('viewAll', language)}</Text>
                     </TouchableOpacity>
                 </View>
-                <Card>
-                    {recentInvoices.length === 0 ? (
-                        <Text style={[styles.emptyText, { color: mutedColor }]}>No invoices yet</Text>
-                    ) : (
-                        recentInvoices.map((invoice, index) => (
-                            <TouchableOpacity
-                                key={invoice.id}
-                                style={[styles.invoiceItem, index < recentInvoices.length - 1 && styles.invoiceItemBorder]}
-                                onPress={() => navigation.navigate('Invoices', { screen: 'InvoiceDetail', params: { invoiceId: invoice.id } })}
-                            >
-                                <View style={styles.invoiceInfo}>
-                                    <Text style={[styles.invoiceNumber, { color: textColor }]}>{invoice.invoice_number}</Text>
-                                    <Text style={[styles.invoiceClient, { color: mutedColor }]}>{(invoice as any).client?.name || 'No client'}</Text>
-                                </View>
-                                <View style={styles.invoiceRight}>
-                                    <Text style={styles.invoiceAmount}>{formatCurrency(Number(invoice.total_amount))}</Text>
-                                    <StatusBadge status={invoice.status} />
-                                </View>
-                            </TouchableOpacity>
-                        ))
-                    )}
+
+                <Card style={styles.recentCard}>
+                    {invoices.slice(0, 5).map((inv) => (
+                        <TouchableOpacity key={inv.id} style={styles.invoiceItem} onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { invoiceId: inv.id } })}>
+                            <View style={styles.invoiceInfo}>
+                                <Text style={[styles.invoiceNumber, { color: textColor }]}>{inv.invoice_number}</Text>
+                                <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || 'Quick Invoice'}</Text>
+                            </View>
+                            <View style={styles.invoiceRight}>
+                                <Text style={[styles.invoiceAmount, { color: textColor }]}>{formatCurrency(inv.total_amount)}</Text>
+                                <StatusBadge status={inv.status} />
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                    {invoices.length === 0 && <Text style={[styles.emptyText, { color: mutedColor }]}>No invoices yet</Text>}
                 </Card>
             </ScrollView>
+
+            <FAB
+                onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceForm' })}
+                actions={[
+                    { label: t('newInvoice', language), icon: FileText, color: primaryColor, onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceForm' }) },
+                    { label: 'New Expense', icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('Management', { screen: 'ExpenseForm' }) },
+                    { label: t('newClient', language), icon: Users, color: '#10b981', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'clients', openForm: true } }) },
+                    { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'products', openForm: true } }) },
+                ]}
+            />
+        </View>
+    );
+}
+
+function StatCard({ title, value, icon, color, growth, isDark }: any) {
+    return (
+        <Card style={[styles.statCard, { flex: 1 }]}>
+            <View style={[styles.statIcon, { backgroundColor: `${color}20` }]}>
+                {React.createElement(icon, { color, size: 20 })}
+            </View>
+            <Text style={[styles.statTitle, { color: isDark ? '#94a3b8' : '#64748b' }]}>{title}</Text>
+            <Text style={[styles.statValue, { color: isDark ? '#fff' : '#1e293b' }]}>{value}</Text>
+            {!!growth && (
+                <View style={styles.growthContainer}>
+                    <ArrowUpRight color="#10b981" size={12} />
+                    <Text style={styles.growthText}>{growth}% from last month</Text>
+                </View>
+            )}
+        </Card>
+    );
+}
+
+function StatusItem({ label, value, color, bgColor }: any) {
+    return (
+        <View style={[styles.statusItem, { backgroundColor: bgColor }]}>
+            <Text style={[styles.statusLabel, { color }]}>{label}</Text>
+            <Text style={[styles.statusValue, { color }]}>{value}</Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
+    headerActions: { flexDirection: 'row', alignItems: 'center' },
+    welcome: { fontSize: 14, fontWeight: '500' },
+    companyName: { fontSize: 24, fontWeight: 'bold' },
+    profileButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingTop: 56, paddingBottom: 32 },
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-    header: { fontSize: 32, fontWeight: 'bold' },
-    scanButton: { padding: 12, borderRadius: 12 },
-    revenueCard: { marginBottom: 20, backgroundColor: '#6366f1', borderColor: '#818cf8' },
-    revenueLabel: { fontSize: 14, color: 'rgba(255,255,255,0.7)' },
-    revenueAmount: { fontSize: 36, fontWeight: 'bold', color: '#fff', marginVertical: 8 },
-    revenueRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    revenueChange: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    changeText: { fontSize: 14, fontWeight: '600' },
-    changeLabel: { color: 'rgba(255,255,255,0.6)' },
-    thisMonth: { fontSize: 13 },
-    quickStats: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    quickStat: { flex: 1, alignItems: 'center', padding: 16, borderRadius: 16 },
-    quickStatValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8 },
-    quickStatLabel: { fontSize: 12, marginTop: 2 },
-    statusGrid: { flexDirection: 'row', gap: 10, marginBottom: 24 },
-    statusCard: { flex: 1, padding: 14, borderRadius: 14 },
-    statusIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    statusValue: { fontSize: 15, fontWeight: 'bold' },
-    statusLabel: { fontSize: 11, marginTop: 2 },
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: '600' },
-    seeAllText: { color: '#818cf8', fontWeight: '600' },
-    topClientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-    topClientBorder: { borderBottomWidth: 1, borderBottomColor: '#334155' },
-    topClientInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    rankBadge: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    rankText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-    topClientName: { fontSize: 15, fontWeight: '500' },
-    topClientAmount: { color: '#818cf8', fontWeight: '600' },
-    emptyText: { textAlign: 'center', padding: 24 },
-    invoiceItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-    invoiceItemBorder: { borderBottomWidth: 1, borderBottomColor: '#334155' },
+    scrollContent: { padding: 16, paddingBottom: 100 },
+    statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+    statCard: { padding: 16 },
+    statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+    statTitle: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
+    statValue: { fontSize: 18, fontWeight: 'bold' },
+    growthContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+    growthText: { color: '#10b981', fontSize: 10, fontWeight: '600', marginLeft: 2 },
+    chartCard: { padding: 16, marginBottom: 16 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 },
+    cardTitle: { fontSize: 16, fontWeight: 'bold' },
+    chartContainer: { height: 160, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingBottom: 20 },
+    chartCol: { alignItems: 'center', flex: 1 },
+    barContainer: { height: '100%', justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'flex-end' },
+    bar: { width: 8, borderRadius: 4 },
+    chartLabel: { fontSize: 10, marginTop: 8, fontWeight: '600' },
+    chartLegend: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 8 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    dot: { width: 8, height: 8, borderRadius: 4 },
+    legendText: { fontSize: 12, fontWeight: '500' },
+    statusRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    statusItem: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
+    statusLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase' },
+    statusValue: { fontSize: 13, fontWeight: 'bold' },
+    alertCard: { padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#f97316' },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+    alertTitle: { color: '#9a3412', fontWeight: 'bold' },
+    alertText: { color: '#c2410c', fontSize: 13 },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold' },
+    recentCard: { padding: 8 },
+    invoiceItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
     invoiceInfo: { flex: 1 },
-    invoiceNumber: { fontWeight: '600', marginBottom: 2 },
-    invoiceClient: { fontSize: 13 },
-    invoiceRight: { alignItems: 'flex-end', gap: 4 },
-    invoiceAmount: { color: '#818cf8', fontWeight: '600' },
+    invoiceNumber: { fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
+    clientName: { fontSize: 13 },
+    invoiceRight: { alignItems: 'flex-end' },
+    invoiceAmount: { fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
+    emptyText: { textAlign: 'center', padding: 20, fontStyle: 'italic' },
 });

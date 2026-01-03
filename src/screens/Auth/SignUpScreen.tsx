@@ -17,8 +17,13 @@ interface SignUpScreenProps {
 }
 
 export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
-    const { signUp } = useAuth();
+    const { signUp, verifyEmailOtp } = useAuth();
     const [email, setEmail] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [companyName, setCompanyName] = useState('');
+    const [companyRegNumber, setCompanyRegNumber] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -26,8 +31,8 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
     const [success, setSuccess] = useState(false);
 
     const handleSignUp = async () => {
-        if (!email || !password || !confirmPassword) {
-            setError('Please fill in all fields');
+        if (!email || !password || !confirmPassword || !firstName || !lastName || !phone) {
+            setError('Please fill in all required fields marked with *');
             return;
         }
 
@@ -45,7 +50,16 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
         setError('');
 
         try {
-            const { error: signUpError } = await signUp(email, password);
+            const { error: signUpError } = await signUp(email, password, {
+                data: {
+                    first_name: firstName,
+                    last_name: lastName,
+                    full_name: `${firstName} ${lastName}`,
+                    phone: phone,
+                    company_name: companyName,
+                    tax_id: companyRegNumber
+                }
+            });
             if (signUpError) {
                 setError(signUpError.message);
             } else {
@@ -58,19 +72,64 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
         }
     };
 
+    const [verificationCode, setVerificationCode] = useState('');
+
+    const handleVerify = async () => {
+        if (!verificationCode) {
+            setError('Please enter the code');
+            return;
+        }
+        setLoading(true);
+        try {
+            const { error } = await verifyEmailOtp(email, verificationCode);
+            if (error) {
+                setError(error.message);
+            } else {
+                // Determine what to do after success. Usually session is set and auth listener navigates.
+                // Or user can sign in.
+                onNavigateToSignIn();
+            }
+        } catch (e) {
+            setError('Verification failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (success) {
         return (
-            <View style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
                 <View style={styles.successBox}>
-                    <Text style={styles.successTitle}>Check your email!</Text>
+                    <Text style={styles.successTitle}>Verify Email</Text>
                     <Text style={styles.successText}>
-                        We've sent you a confirmation link. Please verify your email to continue.
+                        Please enter the verification code sent to {email}
                     </Text>
-                    <TouchableOpacity style={styles.button} onPress={onNavigateToSignIn}>
-                        <Text style={styles.buttonText}>Back to Sign In</Text>
+
+                    {error ? (
+                        <View style={styles.errorBox}>
+                            <Text style={styles.errorText}>{error}</Text>
+                        </View>
+                    ) : null}
+
+                    <TextInput
+                        style={[styles.input, { width: '100%', textAlign: 'center', fontSize: 24, letterSpacing: 4 }]}
+                        placeholder="000000"
+                        placeholderTextColor="#64748b"
+                        value={verificationCode}
+                        onChangeText={setVerificationCode}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                    />
+
+                    <TouchableOpacity style={[styles.button, { marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify Code</Text>}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={{ marginTop: 16 }} onPress={onNavigateToSignIn}>
+                        <Text style={styles.link}>Skip to Sign In</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         );
     }
 
@@ -96,7 +155,29 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
                     ) : null}
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Email</Text>
+                        <Text style={styles.label}>Name *</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="First Name"
+                            placeholderTextColor="#64748b"
+                            value={firstName}
+                            onChangeText={setFirstName}
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Last Name *</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Last Name"
+                            placeholderTextColor="#64748b"
+                            value={lastName}
+                            onChangeText={setLastName}
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Email *</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Enter your email"
@@ -109,7 +190,7 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Password</Text>
+                        <Text style={styles.label}>Password *</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Create a password"
@@ -121,7 +202,7 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Confirm Password</Text>
+                        <Text style={styles.label}>Confirm Password *</Text>
                         <TextInput
                             style={styles.input}
                             placeholder="Confirm your password"
@@ -129,6 +210,40 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
                             secureTextEntry
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Phone Number *</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="+1 234 567 8900"
+                            placeholderTextColor="#64748b"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Company Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Your Company Details"
+                            placeholderTextColor="#64748b"
+                            value={companyName}
+                            onChangeText={setCompanyName}
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Company Registered Number</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Tax ID / Registration"
+                            placeholderTextColor="#64748b"
+                            value={companyRegNumber}
+                            onChangeText={setCompanyRegNumber}
                         />
                     </View>
 

@@ -8,13 +8,17 @@ import {
     Platform,
     Alert,
     StyleSheet,
+    Switch,
 } from 'react-native';
-import { ArrowLeft, Plus, Trash2, ChevronDown, User, Calendar, FileText, Percent } from 'lucide-react-native';
+import { ArrowLeft, Plus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { SvgXml } from 'react-native-svg';
+import { t } from '../../i18n';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, Input, Button } from '../../components/common';
-import { Client, Product, InvoiceStatus } from '../../types';
+import { Card, Input, Button, QuickAddModal, BarcodeScannerModal, SignaturePadModal } from '../../components/common';
+import { Profile, Invoice, Client, Product, InvoiceStatus } from '../../types';
 
 interface InvoiceFormScreenProps {
     navigation: any;
@@ -27,13 +31,24 @@ interface LineItem {
     description: string;
     quantity: number;
     unit_price: number;
+    unit: string;
     tax_rate?: number;
     amount: number;
 }
 
+const intervals = [
+    { label: 'Weekly', value: 'weekly' },
+    { label: 'Monthly', value: 'monthly' },
+    { label: 'Quarterly', value: 'quarterly' },
+    { label: 'Yearly', value: 'yearly' },
+];
+
+const units = ['pcs', 'hrs', 'kg', 'unit', 'mt', 'l'];
+
 export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
+    const [profile, setProfile] = useState<Profile | null>(null);
     const invoiceId = route.params?.invoiceId;
     const isEditing = !!invoiceId;
 
@@ -41,6 +56,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [clients, setClients] = useState<Client[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [showClientPicker, setShowClientPicker] = useState(false);
+    const [showQuickClient, setShowQuickClient] = useState(false);
+    const [showQuickProduct, setShowQuickProduct] = useState(false);
+    const [showScanner, setShowScanner] = useState(false);
+    const [showSignaturePad, setShowSignaturePad] = useState(false);
+    const [activeRowId, setActiveRowId] = useState<string | null>(null);
     const [currency, setCurrency] = useState('USD');
     const [defaultTaxRate, setDefaultTaxRate] = useState(0);
 
@@ -59,32 +79,58 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         discount_amount: 0,
         discount_percent: 0,
         notes: '',
+        is_recurring: false,
+        recurring_interval: 'monthly' as any,
+        type: 'invoice' as 'invoice' | 'offer',
+        buyer_signature_url: '',
     });
 
     const [lineItems, setLineItems] = useState<LineItem[]>([
-        { id: '1', description: '', quantity: 1, unit_price: 0, amount: 0 },
+        { id: '1', description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 },
     ]);
 
     useEffect(() => {
         fetchInitialData();
         if (isEditing) fetchInvoice();
-        else generateInvoiceNumber();
+        else {
+            // Wait for profile to load? No, generate immediately with defaults
+            // But we might need to know if the user passed a type param?
+            const initialType = route.params?.type || 'invoice';
+            setFormData(prev => ({ ...prev, type: initialType })); // Set initial type from nav params if any
+            // We'll let the type selector effect trigger the generation or do it here
+        }
     }, []);
+
+    // Effect to regenerate number when type changes (only in create mode)
+    useEffect(() => {
+        if (!isEditing) {
+            generateInvoiceNumber();
+        }
+    }, [formData.type]);
 
     const fetchInitialData = async () => {
         if (!user) return;
 
-        const { data: profile } = await supabase.from('profiles').select('currency, tax_rate').eq('id', user.id).single();
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profile) {
+            setProfile(profile);
             setCurrency(profile.currency || 'USD');
             setDefaultTaxRate(profile.tax_rate || 0);
+
+            const companyId = profile.company_id || user.id;
+
+            const { data: clientsData } = await supabase
+                .from('clients')
+                .select('*')
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+            if (clientsData) setClients(clientsData);
+
+            const { data: productsData } = await supabase
+                .from('products')
+                .select('*')
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+            if (productsData) setProducts(productsData);
         }
-
-        const { data: clientsData } = await supabase.from('clients').select('*').eq('user_id', user.id);
-        if (clientsData) setClients(clientsData);
-
-        const { data: productsData } = await supabase.from('products').select('*').eq('user_id', user.id);
-        if (productsData) setProducts(productsData);
     };
 
     const fetchInvoice = async () => {
@@ -96,33 +142,40 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 issue_date: invoice.issue_date,
                 due_date: invoice.due_date || '',
                 status: invoice.status,
-                discount_amount: invoice.discount_amount || 0,
-                discount_percent: invoice.discount_percent || 0,
+                discount_amount: Number(invoice.discount_amount) || 0,
+                discount_percent: Number(invoice.discount_percent) || 0,
                 notes: invoice.notes || '',
+                is_recurring: invoice.is_recurring || false,
+                recurring_interval: invoice.recurring_interval || 'monthly',
+                type: invoice.type || 'invoice',
+                buyer_signature_url: invoice.buyer_signature_url || '',
             });
         }
 
         const { data: items } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
-        if (items && items.length > 0) setLineItems(items);
+        if (items && items.length > 0) setLineItems(items.map(it => ({
+            ...it,
+            quantity: Number(it.quantity),
+            unit_price: Number(it.unit_price),
+            amount: Number(it.amount)
+        })));
     };
 
     const generateInvoiceNumber = async () => {
-        const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user?.id);
+        const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user?.id).eq('type', formData.type);
         const nextNumber = (count || 0) + 1;
         const today = new Date();
         const dd = String(today.getDate()).padStart(2, '0');
         const mm = String(today.getMonth() + 1).padStart(2, '0');
         const yyyy = today.getFullYear();
-        // Format: 001-02-01-2026
-        setFormData((prev) => ({ ...prev, invoice_number: `${String(nextNumber).padStart(3, '0')}-${dd}-${mm}-${yyyy}` }));
+        const prefix = formData.type === 'offer' ? 'OFF' : 'INV';
+        setFormData((prev) => ({ ...prev, invoice_number: `${prefix}-${String(nextNumber).padStart(3, '0')}-${dd}-${mm}-${yyyy}` }));
     };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency,
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
         }).format(amount);
     };
 
@@ -137,79 +190,117 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
     const calculateDiscount = () => {
         const subtotal = calculateSubtotal();
-        if (formData.discount_percent > 0) {
-            return subtotal * (formData.discount_percent / 100);
-        }
+        if (formData.discount_percent > 0) return subtotal * (formData.discount_percent / 100);
         return formData.discount_amount;
     };
 
     const calculateTotal = () => calculateSubtotal() + calculateTax() - calculateDiscount();
 
     const updateLineItem = (id: string, field: keyof LineItem, value: any) => {
-        setLineItems((items) =>
-            items.map((item) => {
-                if (item.id === id) {
-                    const updated = { ...item, [field]: value };
-                    if (field === 'quantity' || field === 'unit_price') {
-                        updated.amount = updated.quantity * updated.unit_price;
-                    }
-                    return updated;
+        setLineItems(items => items.map(item => {
+            if (item.id === id) {
+                const updated = { ...item, [field]: value };
+                if (field === 'quantity' || field === 'unit_price') {
+                    updated.amount = updated.quantity * updated.unit_price;
                 }
-                return item;
-            })
-        );
+                return updated;
+            }
+            return item;
+        }));
     };
 
     const addLineItem = () => {
-        setLineItems((items) => [
+        setLineItems(items => [
             ...items,
-            { id: String(Date.now()), description: '', quantity: 1, unit_price: 0, amount: 0 },
+            { id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 },
         ]);
     };
 
     const removeLineItem = (id: string) => {
         if (lineItems.length === 1) return;
-        setLineItems((items) => items.filter((item) => item.id !== id));
+        setLineItems(items => items.filter(item => item.id !== id));
     };
 
     const selectProduct = (item: LineItem, product: Product) => {
-        setLineItems((items) =>
-            items.map((i) => {
-                if (i.id === item.id) {
-                    const price = Number(product.unit_price);
-                    return {
-                        ...i,
-                        description: product.name,
-                        unit_price: price,
-                        amount: i.quantity * price,
-                        product_id: product.id,
-                        tax_rate: product.tax_rate,
-                    };
-                }
-                return i;
-            })
-        );
+        setLineItems(items => items.map(i => {
+            if (i.id === item.id) {
+                return {
+                    ...i,
+                    description: product.name,
+                    unit_price: Number(product.unit_price),
+                    unit: product.unit || 'pcs',
+                    amount: i.quantity * Number(product.unit_price),
+                    product_id: product.id,
+                    tax_rate: product.tax_rate,
+                };
+            }
+            return i;
+        }));
     };
 
-    const selectClient = (client: Client) => {
-        setFormData({
-            ...formData,
-            client_id: client.id,
-            discount_percent: client.discount_percent || 0,
+    const handleQuickAddClient = async (data: any) => {
+        const { data: newClient, error } = await supabase
+            .from('clients')
+            .insert({ ...data, user_id: user?.id, company_id: profile?.company_id || user?.id })
+            .select()
+            .single();
+        if (newClient) {
+            setClients([...clients, newClient]);
+            setFormData({ ...formData, client_id: newClient.id });
+        }
+    };
+
+    const handleQuickAddProduct = async (data: any) => {
+        const { data: newProduct, error } = await supabase
+            .from('products')
+            .insert({ ...data, user_id: user?.id, company_id: profile?.company_id || user?.id })
+            .select()
+            .single();
+        if (newProduct) {
+            setProducts([...products, newProduct]);
+            if (activeRowId) {
+                const item = lineItems.find(i => i.id === activeRowId);
+                if (item) selectProduct(item, newProduct);
+            }
+        }
+    };
+
+    const handleBarcodeScanned = (code: string) => {
+        const product = products.find(p => p.barcode === code || p.sku === code);
+        if (product && activeRowId) {
+            const item = lineItems.find(i => i.id === activeRowId);
+            if (item) selectProduct(item, product);
+        } else if (activeRowId) {
+            Alert.alert('Not Found', `No product found with barcode: ${code}. Add it as a new product?`, [
+                { text: 'Cancel' },
+                { text: 'Add Product', onPress: () => setShowQuickProduct(true) }
+            ]);
+        }
+    };
+
+    const pickBuyerSignature = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 1],
+            quality: 0.5,
+            base64: true,
         });
-        setShowClientPicker(false);
+
+        if (!result.canceled && result.assets[0].base64) {
+            const base64 = `data:image/png;base64,${result.assets[0].base64}`;
+            setFormData(prev => ({ ...prev, buyer_signature_url: base64 }));
+        }
     };
 
     const handleSave = async () => {
-        if (!formData.invoice_number) {
-            Alert.alert('Error', 'Invoice number is required');
-            return;
-        }
+        if (!formData.invoice_number) { Alert.alert('Error', 'Invoice number is required'); return; }
 
         setLoading(true);
         try {
             const invoiceData = {
                 user_id: user?.id,
+                company_id: profile?.company_id || user?.id,
                 client_id: formData.client_id || null,
                 invoice_number: formData.invoice_number,
                 issue_date: formData.issue_date,
@@ -220,28 +311,32 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 tax_amount: calculateTax(),
                 total_amount: calculateTotal(),
                 notes: formData.notes,
+                is_recurring: formData.is_recurring,
+                recurring_interval: formData.is_recurring ? formData.recurring_interval : null,
+                type: formData.type,
+                buyer_signature_url: formData.buyer_signature_url,
             };
 
-            let savedInvoiceId = invoiceId;
-
+            let savedId = invoiceId;
             if (isEditing) {
                 await supabase.from('invoices').update(invoiceData).eq('id', invoiceId);
                 await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
             } else {
                 const { data } = await supabase.from('invoices').insert(invoiceData).select().single();
-                savedInvoiceId = data?.id;
+                savedId = data?.id;
             }
 
             const itemsToInsert = lineItems
-                .filter((item) => item.description)
-                .map((item) => ({
-                    invoice_id: savedInvoiceId,
-                    product_id: item.product_id || null,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price,
-                    tax_rate: item.tax_rate,
-                    amount: item.amount,
+                .filter(it => it.description)
+                .map(it => ({
+                    invoice_id: savedId,
+                    product_id: it.product_id || null,
+                    description: it.description,
+                    quantity: it.quantity,
+                    unit_price: it.unit_price,
+                    unit: it.unit,
+                    tax_rate: it.tax_rate,
+                    amount: it.amount,
                 }));
 
             await supabase.from('invoice_items').insert(itemsToInsert);
@@ -253,7 +348,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         }
     };
 
-    const selectedClient = clients.find((c) => c.id === formData.client_id);
+    const selectedClientObj = clients.find(c => c.id === formData.client_id);
 
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
@@ -261,66 +356,91 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{isEditing ? 'Edit Invoice' : 'New Invoice'}</Text>
+                <Text style={[styles.title, { color: textColor }]}>
+                    {isEditing ? (formData.type === 'invoice' ? `${t('edit', language)} ${t('invoice', language)}` : `${t('edit', language)} ${t('offer', language)}`) : (formData.type === 'invoice' ? t('newInvoice', language) : t('newOffer', language))}
+                </Text>
+            </View>
+
+            <View style={styles.typeSelector}>
+                {(['invoice', 'offer'] as const).map((tValue) => (
+                    <TouchableOpacity
+                        key={tValue}
+                        style={[styles.typeOption, { backgroundColor: inputBg }, formData.type === tValue && { backgroundColor: primaryColor }]}
+                        onPress={() => {
+                            setFormData(prev => ({ ...prev, type: tValue }));
+                            if (!isEditing) generateInvoiceNumber();
+                        }}
+                    >
+                        <Text style={[styles.typeText, { color: formData.type === tValue ? '#fff' : mutedColor }]}>
+                            {tValue === 'invoice' ? t('invoices', language).toUpperCase() : t('offers', language).toUpperCase()}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-                {/* Invoice Details */}
+                {/* Details Section */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <FileText color="#818cf8" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Invoice Details</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{formData.type === 'invoice' ? 'Invoice Basics' : 'Offer Basics'}</Text>
                     </View>
-
-                    <Input label="Invoice Number" value={formData.invoice_number} onChangeText={(text) => setFormData({ ...formData, invoice_number: text })} placeholder="001-02-01-2026" />
-
+                    <Input label={formData.type === 'invoice' ? 'Invoice #' : 'Offer #'} value={formData.invoice_number} onChangeText={t => setFormData({ ...formData, invoice_number: t })} />
                     <View style={styles.row}>
-                        <View style={styles.halfField}>
-                            <Input label="Issue Date" value={formData.issue_date} onChangeText={(text) => setFormData({ ...formData, issue_date: text })} placeholder="YYYY-MM-DD" />
+                        <View style={styles.half}>
+                            <Input label="Issue Date" value={formData.issue_date} onChangeText={t => setFormData({ ...formData, issue_date: t })} placeholder="YYYY-MM-DD" />
                         </View>
-                        <View style={styles.halfField}>
-                            <Input label="Due Date" value={formData.due_date} onChangeText={(text) => setFormData({ ...formData, due_date: text })} placeholder="YYYY-MM-DD" />
+                        <View style={styles.half}>
+                            <Input label="Due Date" value={formData.due_date} onChangeText={t => setFormData({ ...formData, due_date: t })} placeholder="YYYY-MM-DD" />
                         </View>
                     </View>
                 </View>
 
-                {/* Client Selection */}
+                {/* Recurring Section */}
+                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                    <View style={styles.sectionHeader}>
+                        <RefreshCw color="#6366f1" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Recurring Invoice</Text>
+                        <Switch value={formData.is_recurring} onValueChange={v => setFormData({ ...formData, is_recurring: v })} />
+                    </View>
+                    {formData.is_recurring && (
+                        <View style={styles.intervalGrid}>
+                            {intervals.map(int => (
+                                <TouchableOpacity
+                                    key={int.value}
+                                    style={[styles.intervalChip, { backgroundColor: inputBg }, formData.recurring_interval === int.value && styles.activeInterval]}
+                                    onPress={() => setFormData({ ...formData, recurring_interval: int.value })}
+                                >
+                                    <Text style={[styles.intervalText, { color: formData.recurring_interval === int.value ? '#fff' : mutedColor }]}>{int.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                </View>
+
+                {/* Client Section */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <User color="#10b981" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Client</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Recipient</Text>
                     </View>
-
-                    <TouchableOpacity style={[styles.clientPicker, { backgroundColor: inputBg }]} onPress={() => setShowClientPicker(!showClientPicker)}>
-                        <View>
-                            <Text style={selectedClient ? { color: textColor } : { color: mutedColor }}>
-                                {selectedClient?.name || 'Select a client'}
-                            </Text>
-                            {selectedClient?.discount_percent && selectedClient.discount_percent > 0 && (
-                                <Text style={styles.clientDiscount}>{selectedClient.discount_percent}% discount applied</Text>
-                            )}
-                        </View>
-                        <ChevronDown color={mutedColor} size={20} />
-                    </TouchableOpacity>
-
-                    {showClientPicker && clients.length > 0 && (
-                        <View style={styles.clientList}>
-                            {clients.map((client) => (
-                                <TouchableOpacity
-                                    key={client.id}
-                                    style={[styles.clientOption, formData.client_id === client.id && styles.clientOptionActive]}
-                                    onPress={() => selectClient(client)}
-                                >
-                                    <View>
-                                        <Text style={[styles.clientOptionText, { color: formData.client_id === client.id ? '#fff' : textColor }]}>{client.name}</Text>
-                                        <Text style={[styles.clientOptionEmail, { color: formData.client_id === client.id ? 'rgba(255,255,255,0.7)' : mutedColor }]}>{client.email}</Text>
-                                    </View>
-                                    {client.discount_percent && client.discount_percent > 0 && (
-                                        <View style={styles.clientDiscountBadge}>
-                                            <Percent color="#10b981" size={10} />
-                                            <Text style={styles.clientDiscountText}>{client.discount_percent}%</Text>
-                                        </View>
-                                    )}
+                    <View style={styles.row}>
+                        <TouchableOpacity style={[styles.picker, { backgroundColor: inputBg, flex: 1 }]} onPress={() => setShowClientPicker(!showClientPicker)}>
+                            <Text style={{ color: selectedClientObj ? textColor : mutedColor }}>{selectedClientObj?.name || 'Select Client'}</Text>
+                            <ChevronDown color={mutedColor} size={18} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.smallActionBtn, { backgroundColor: '#10b98120' }]}
+                            onPress={() => setShowQuickClient(true)}
+                        >
+                            <Plus color="#10b981" size={20} />
+                        </TouchableOpacity>
+                    </View>
+                    {showClientPicker && (
+                        <View style={styles.pickerList}>
+                            {clients.map(c => (
+                                <TouchableOpacity key={c.id} style={styles.pickerItem} onPress={() => { setFormData({ ...formData, client_id: c.id }); setShowClientPicker(false); }}>
+                                    <Text style={{ color: textColor }}>{c.name}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -328,149 +448,255 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 </View>
 
                 {/* Line Items */}
-                <Text style={[styles.sectionLabel, { color: textColor }]}>Line Items</Text>
-                {lineItems.map((item, index) => (
-                    <View key={item.id} style={[styles.section, { backgroundColor: cardBg }]}>
-                        <View style={styles.lineItemHeader}>
-                            <Text style={[styles.lineItemLabel, { color: mutedColor }]}>Item {index + 1}</Text>
-                            {lineItems.length > 1 && (
-                                <TouchableOpacity onPress={() => removeLineItem(item.id)} style={styles.removeBtn}>
+                <Text style={styles.labelGroup}>Line Items</Text>
+                {lineItems.map((item, idx) => (
+                    <Card key={item.id} style={styles.itemCard}>
+                        <View style={styles.itemHeader}>
+                            <Text style={styles.itemCount}>Item {idx + 1}</Text>
+                            <View style={styles.row}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setActiveRowId(item.id);
+                                        setShowScanner(true);
+                                    }}
+                                    style={styles.iconActionBtn}
+                                >
+                                    <Barcode color="#818cf8" size={18} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => removeLineItem(item.id)} style={styles.iconActionBtn}>
                                     <Trash2 color="#ef4444" size={18} />
                                 </TouchableOpacity>
-                            )}
+                            </View>
+                        </View>
+                        <View style={styles.row}>
+                            <View style={{ flex: 1 }}>
+                                <Input label="Description" value={item.description} onChangeText={t => updateLineItem(item.id, 'description', t)} />
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.smallActionBtn, { marginTop: 24, backgroundColor: '#f1f5f920' }]}
+                                onPress={() => {
+                                    setActiveRowId(item.id);
+                                    setShowQuickProduct(true);
+                                }}
+                            >
+                                <Plus color={textColor} size={20} />
+                            </TouchableOpacity>
                         </View>
 
-                        <Input
-                            label="Description"
-                            value={item.description}
-                            onChangeText={(text) => updateLineItem(item.id, 'description', text)}
-                            placeholder="Product or service"
-                        />
-
-                        {products.length > 0 && !item.description && (
-                            <View style={styles.productChips}>
-                                <Text style={[styles.chipLabel, { color: mutedColor }]}>Quick add:</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                    {products.slice(0, 5).map((product) => (
-                                        <TouchableOpacity key={product.id} style={styles.productChip} onPress={() => selectProduct(item, product)}>
-                                            <Text style={styles.productChipText}>{product.name}</Text>
+                        <View style={styles.row}>
+                            <View style={{ flex: 1 }}>
+                                <Input label="Qty" value={String(item.quantity)} onChangeText={t => updateLineItem(item.id, 'quantity', Number(t) || 1)} keyboardType="numeric" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ marginBottom: 8 }}><Text style={[styles.tinyLabel, { color: mutedColor }]}>Unit</Text></View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 40 }}>
+                                    {units.map(u => (
+                                        <TouchableOpacity key={u} style={[styles.unitChip, item.unit === u && styles.activeUnit]} onPress={() => updateLineItem(item.id, 'unit', u)}>
+                                            <Text style={[styles.unitText, item.unit === u && styles.activeUnitText]}>{u}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>
                             </View>
-                        )}
-
-                        <View style={styles.row}>
-                            <View style={styles.thirdField}>
-                                <Input label="Qty" value={String(item.quantity)} onChangeText={(text) => updateLineItem(item.id, 'quantity', Number(text) || 0)} keyboardType="number-pad" />
-                            </View>
-                            <View style={styles.thirdField}>
-                                <Input label="Price" value={String(item.unit_price)} onChangeText={(text) => updateLineItem(item.id, 'unit_price', Number(text) || 0)} keyboardType="decimal-pad" />
-                            </View>
-                            <View style={styles.thirdField}>
-                                <Text style={[styles.label, { color: textColor }]}>Amount</Text>
-                                <View style={[styles.amountBox, { backgroundColor: inputBg }]}>
-                                    <Text style={styles.amountText}>{formatCurrency(item.amount)}</Text>
-                                </View>
+                            <View style={{ flex: 1.5 }}>
+                                <Input label="Price" value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
                             </View>
                         </View>
-                    </View>
+                        <View style={styles.itemTotal}>
+                            <Text style={{ color: mutedColor }}>Amount: </Text>
+                            <Text style={{ color: '#818cf8', fontWeight: 'bold' }}>{formatCurrency(item.amount)}</Text>
+                        </View>
+                    </Card>
                 ))}
 
-                <TouchableOpacity style={styles.addLineButton} onPress={addLineItem}>
-                    <Plus color="#818cf8" size={20} />
-                    <Text style={styles.addLineText}>Add Line Item</Text>
-                </TouchableOpacity>
+                <Button title="Add New Item" variant="secondary" icon={Plus} onPress={addLineItem} style={{ marginBottom: 24 }} />
 
-                {/* Summary */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: mutedColor }]}>Subtotal</Text>
-                        <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(calculateSubtotal())}</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={[styles.summaryLabel, { color: mutedColor }]}>Tax</Text>
-                        <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(calculateTax())}</Text>
-                    </View>
+                {/* Summary Section */}
+                <Card style={styles.summaryCard}>
+                    <SummaryRow label="Subtotal" value={formatCurrency(calculateSubtotal())} color={textColor} />
+                    <SummaryRow label="Tax" value={formatCurrency(calculateTax())} color={textColor} />
 
-                    <View style={styles.discountSection}>
-                        <Text style={[styles.discountTitle, { color: textColor }]}>Discount</Text>
+                    <View style={styles.discountBox}>
+                        <Text style={[styles.tinyLabel, { color: mutedColor }]}>Discount</Text>
                         <View style={styles.row}>
-                            <View style={styles.halfField}>
-                                <Input label="Percent (%)" value={String(formData.discount_percent || '')} onChangeText={(text) => setFormData({ ...formData, discount_percent: Number(text) || 0, discount_amount: 0 })} keyboardType="decimal-pad" />
-                            </View>
-                            <View style={styles.halfField}>
-                                <Input label="Fixed Amount" value={String(formData.discount_amount || '')} onChangeText={(text) => setFormData({ ...formData, discount_amount: Number(text) || 0, discount_percent: 0 })} keyboardType="decimal-pad" />
-                            </View>
+                            <View style={{ flex: 1 }}><Input label="%" value={String(formData.discount_percent || '')} onChangeText={t => setFormData({ ...formData, discount_percent: Number(t) || 0 })} keyboardType="numeric" /></View>
+                            <View style={{ flex: 1 }}><Input label="Amount" value={String(formData.discount_amount || '')} onChangeText={t => setFormData({ ...formData, discount_amount: Number(t) || 0 })} keyboardType="numeric" /></View>
                         </View>
                     </View>
 
-                    {calculateDiscount() > 0 && (
-                        <View style={styles.summaryRow}>
-                            <Text style={[styles.summaryLabel, { color: '#10b981' }]}>Discount Applied</Text>
-                            <Text style={[styles.summaryValue, { color: '#10b981' }]}>-{formatCurrency(calculateDiscount())}</Text>
-                        </View>
-                    )}
+                    <SummaryRow label="Total" value={formatCurrency(calculateTotal())} color="#818cf8" isLarge />
+                </Card>
 
-                    <View style={[styles.summaryRow, styles.totalRow]}>
-                        <Text style={styles.totalLabel}>Total</Text>
-                        <Text style={styles.totalValue}>{formatCurrency(calculateTotal())}</Text>
-                    </View>
-                </View>
-
-                {/* Notes */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <Input label="Notes" value={formData.notes} onChangeText={(text) => setFormData({ ...formData, notes: text })} placeholder="Additional notes..." multiline numberOfLines={3} />
+                    <Input label="Notes" value={formData.notes} onChangeText={t => setFormData({ ...formData, notes: t })} multiline />
                 </View>
 
-                <Button title={isEditing ? 'Update Invoice' : 'Create Invoice'} onPress={handleSave} loading={loading} style={styles.saveButton} />
+                {/* Buyer Signature Section */}
+                <View style={[styles.section, { backgroundColor: cardBg }]}>
+                    <View style={styles.sectionHeader}>
+                        <Contact color="#ec4899" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Buyer Signature (Required for Invoices)</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.signatureBox, { backgroundColor: inputBg, borderColor: isDark ? '#334155' : '#cbd5e1' }]}
+                        onPress={pickBuyerSignature}
+                    >
+                        {formData.buyer_signature_url ? (
+                            <View style={styles.signaturePreviewContainer}>
+                                {formData.buyer_signature_url.startsWith('data:image/svg+xml') ? (
+                                    <View style={{ width: 40, height: 40 }}>
+                                        <SvgXml xml={decodeURIComponent(formData.buyer_signature_url.split(',')[1])} width="100%" height="100%" />
+                                    </View>
+                                ) : (
+                                    <ImageIcon color={textColor} size={24} style={styles.signaturePreviewImg} />
+                                )}
+                                <Text style={{ color: textColor, fontWeight: 'bold' }}>Signature Captured</Text>
+                                <TouchableOpacity style={styles.clearSignature} onPress={() => setFormData(prev => ({ ...prev, buyer_signature_url: '' }))}>
+                                    <Trash2 color="#ef4444" size={16} />
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.uploadPlaceholder}>
+                                <TouchableOpacity
+                                    style={[styles.smallActionBtnRow, { backgroundColor: primaryColor, marginBottom: 12, paddingVertical: 12, minWidth: 180, justifyContent: 'center' }]}
+                                    onPress={() => setShowSignaturePad(true)}
+                                >
+                                    <FileText color="#fff" size={20} />
+                                    <Text style={{ color: '#fff', marginLeft: 8, fontWeight: 'bold', fontSize: 16 }}>Sign Here</Text>
+                                </TouchableOpacity>
+
+                                <Text style={{ color: mutedColor, marginVertical: 4 }}>- OR -</Text>
+
+                                <TouchableOpacity
+                                    onPress={pickBuyerSignature}
+                                    style={{ alignItems: 'center' }}
+                                >
+                                    <Camera color={mutedColor} size={24} />
+                                    <Text style={{ color: mutedColor, fontSize: 13, marginTop: 4 }}>Upload Image</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                <Button
+                    title={isEditing ? t('saveChanges', language) : `${t('create', language)} ${formData.type === 'invoice' ? t('invoice', language) : t('offer', language)}`}
+                    onPress={handleSave}
+                    loading={loading}
+                />
             </ScrollView>
+
+            <SignaturePadModal
+                visible={showSignaturePad}
+                onClose={() => setShowSignaturePad(false)}
+                onSave={(sig) => setFormData(prev => ({ ...prev, buyer_signature_url: sig }))}
+                primaryColor={primaryColor}
+            />
+
+            <QuickAddModal
+                visible={showQuickClient}
+                onClose={() => setShowQuickClient(false)}
+                title="Quick Add Client"
+                onAdd={handleQuickAddClient}
+                fields={[
+                    { key: 'name', label: 'Client Name', placeholder: 'Acme Corp' },
+                    { key: 'email', label: 'Email', placeholder: 'client@example.com', keyboardType: 'email-address' },
+                    { key: 'phone', label: 'Phone', placeholder: '+1 234...', keyboardType: 'phone-pad' },
+                    { key: 'address', label: 'Address', placeholder: '123 Main St...', multiline: true },
+                ]}
+            />
+
+            <QuickAddModal
+                visible={showQuickProduct}
+                onClose={() => setShowQuickProduct(false)}
+                title="Quick Add Product"
+                onAdd={handleQuickAddProduct}
+                fields={[
+                    { key: 'name', label: 'Product Name', placeholder: 'Consultation' },
+                    { key: 'unit_price', label: 'Unit Price', placeholder: '0.00', keyboardType: 'decimal-pad' },
+                    { key: 'unit', label: 'Unit', placeholder: 'hrs' },
+                    { key: 'sku', label: 'SKU/Barcode', placeholder: 'Optional' },
+                ]}
+            />
+
+            <BarcodeScannerModal
+                visible={showScanner}
+                onClose={() => setShowScanner(false)}
+                onScanned={handleBarcodeScanned}
+            />
         </KeyboardAvoidingView>
+    );
+}
+
+function SummaryRow({ label, value, color, isLarge }: any) {
+    return (
+        <View style={styles.summaryRow}>
+            <Text style={{ color: '#94a3b8', fontSize: isLarge ? 16 : 14 }}>{label}</Text>
+            <Text style={{ color: color, fontSize: isLarge ? 22 : 16, fontWeight: 'bold' }}>{value}</Text>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { marginRight: 16, padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold' },
+    backButton: { marginRight: 16 },
+    title: { fontSize: 24, fontWeight: 'bold' },
+    typeSelector: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, overflow: 'hidden', gap: 1 },
+    typeOption: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+    typeText: { fontSize: 12, fontWeight: 'bold' },
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 40 },
-    section: { borderRadius: 16, padding: 16, marginBottom: 12 },
+    scrollContent: { padding: 16, paddingBottom: 60 },
+    section: { borderRadius: 16, padding: 16, marginBottom: 16 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '600' },
-    sectionLabel: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+    sectionTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
     row: { flexDirection: 'row', gap: 12 },
-    halfField: { flex: 1 },
-    thirdField: { flex: 1 },
-    label: { fontSize: 14, fontWeight: '500', marginBottom: 8 },
-    clientPicker: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 12, padding: 16, marginBottom: 8 },
-    clientDiscount: { color: '#10b981', fontSize: 12, marginTop: 4 },
-    clientList: { gap: 8 },
-    clientOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 10, backgroundColor: 'rgba(99, 102, 241, 0.1)' },
-    clientOptionActive: { backgroundColor: '#6366f1' },
-    clientOptionText: { fontWeight: '600' },
-    clientOptionEmail: { fontSize: 12, marginTop: 2 },
-    clientDiscountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
-    clientDiscountText: { color: '#10b981', fontSize: 11, fontWeight: '600' },
-    lineItemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    lineItemLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
-    removeBtn: { padding: 6 },
-    productChips: { marginBottom: 12 },
-    chipLabel: { fontSize: 12, marginBottom: 8 },
-    productChip: { backgroundColor: '#6366f1', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
-    productChipText: { color: '#fff', fontSize: 13, fontWeight: '500' },
-    amountBox: { borderRadius: 12, padding: 16, alignItems: 'center' },
-    amountText: { color: '#818cf8', fontWeight: '600', fontSize: 15 },
-    addLineButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, marginBottom: 12, gap: 8 },
-    addLineText: { color: '#818cf8', fontWeight: '600', fontSize: 15 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
-    summaryLabel: { fontSize: 14 },
-    summaryValue: { fontSize: 14, fontWeight: '600' },
-    discountSection: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, marginTop: 8 },
-    discountTitle: { fontSize: 14, fontWeight: '600', marginBottom: 12 },
-    totalRow: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, marginTop: 8 },
-    totalLabel: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-    totalValue: { fontSize: 22, fontWeight: 'bold', color: '#818cf8' },
-    saveButton: { marginTop: 8 },
+    half: { flex: 1 },
+    intervalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+    intervalChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+    activeInterval: { backgroundColor: '#6366f1' },
+    intervalText: { fontSize: 12, fontWeight: '600' },
+    picker: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 12 },
+    pickerList: { marginTop: 8, gap: 4 },
+    pickerItem: { padding: 12, borderRadius: 8, backgroundColor: 'rgba(99, 102, 241, 0.05)' },
+    labelGroup: { fontSize: 18, fontWeight: 'bold', marginVertical: 12, color: '#fff' },
+    itemCard: { marginBottom: 12, padding: 16 },
+    itemHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    itemCount: { color: '#94a3b8', fontSize: 12, fontWeight: 'bold' },
+    itemTotal: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' },
+    tinyLabel: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
+    unitChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 6, borderWidth: 1, borderColor: '#334155' },
+    activeUnit: { backgroundColor: 'rgba(99, 102, 241, 0.2)', borderColor: '#818cf8' },
+    unitText: { fontSize: 11, color: '#94a3b8' },
+    activeUnitText: { color: '#818cf8', fontWeight: 'bold' },
+    summaryCard: { padding: 20, marginBottom: 20 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
+    discountBox: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, marginVertical: 8 },
+    saveButton: { marginTop: 16 },
+    smallActionBtn: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    iconActionBtn: {
+        padding: 8,
+        marginLeft: 8,
+    },
+    signatureBox: {
+        height: 160,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    uploadPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+    smallActionBtnRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+    signaturePreviewContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    signaturePreviewImg: { opacity: 0.5 },
+    clearSignature: { padding: 8 },
 });

@@ -1,10 +1,10 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 
 interface CardProps {
     children: ReactNode;
-    style?: ViewStyle;
+    style?: StyleProp<ViewStyle>;
 }
 
 export function Card({ children, style }: CardProps) {

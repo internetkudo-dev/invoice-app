@@ -4,3 +4,6 @@ export * from './Input';
 export * from './StatusBadge';
 export * from './FAB';
 export * from './TemplatePreview';
+export * from './QuickAddModal';
+export * from './BarcodeScannerModal';
+export * from './SignaturePadModal';

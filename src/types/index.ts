@@ -1,4 +1,3 @@
-// Profile (Company) Type
 export interface Profile {
     id: string;
     company_name?: string;
@@ -17,17 +16,53 @@ export interface Profile {
     bank_account?: string;
     bank_iban?: string;
     bank_swift?: string;
+    primary_color: string;
+    is_grayscale: boolean;
+    // New fields
+    payment_link_stripe?: string;
+    payment_link_paypal?: string;
+    invoice_language?: string;
+    terms_conditions?: string;
+    biometric_enabled?: boolean;
+    company_id?: string;
+    role?: 'owner' | 'admin' | 'worker';
+    template_config?: TemplateConfig;
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_user?: string;
+    smtp_pass?: string;
+    smtp_secure?: boolean;
+    smtp_from_email?: string; // Optional: custom FROM address if different than user email
     updated_at: string;
 }
 
-// Client Type
+export interface TemplateConfig {
+    showLogo: boolean;
+    showSignature: boolean;
+    showBuyerSignature: boolean;
+    showStamp: boolean;
+    visibleColumns: {
+        sku: boolean;
+        unit: boolean;
+        tax: boolean;
+        quantity: boolean;
+        price: boolean;
+    };
+    labels: Record<string, string>;
+    pageSize: 'A4' | 'A5';
+}
+
 export interface Client {
     id: string;
     user_id: string;
+    company_id?: string;
     name: string;
     email?: string;
     phone?: string;
     address?: string;
+    city?: string;
+    zip_code?: string;
+    country?: string;
     tax_id?: string;
     discount_percent?: number;
     discount_type?: 'percentage' | 'fixed';
@@ -35,46 +70,69 @@ export interface Client {
     created_at: string;
 }
 
-// Product Type
 export interface Product {
     id: string;
     user_id: string;
+    company_id?: string;
     name: string;
     description?: string;
     sku?: string;
+    barcode?: string;
     unit_price: number;
     tax_rate?: number;
     tax_included?: boolean;
     unit?: string;
     category?: string;
+    // New fields
+    stock_quantity?: number;
+    track_stock?: boolean;
+    low_stock_threshold?: number;
     created_at: string;
 }
 
-// Invoice Status
+export type ExpenseCategory = string;
+
+export interface Expense {
+    id: string;
+    user_id: string;
+    company_id?: string;
+    amount: number;
+    category: ExpenseCategory;
+    description?: string;
+    date: string;
+    receipt_url?: string;
+    created_at: string;
+    type?: 'expense' | 'income';
+}
+
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue';
 
-// Invoice Type
 export interface Invoice {
     id: string;
     user_id: string;
+    company_id?: string;
     client_id?: string;
     invoice_number: string;
     issue_date: string;
     due_date?: string;
     status: InvoiceStatus;
+    type: 'invoice' | 'offer';
+    buyer_signature_url?: string;
     discount_amount: number;
     discount_percent?: number;
     tax_amount: number;
     total_amount: number;
     notes?: string;
     template_id: string;
+    // New fields
+    is_recurring?: boolean;
+    recurring_interval?: 'monthly' | 'yearly';
+    last_recurring_date?: string;
     created_at: string;
-    // Joined data
     client?: Client;
     items?: InvoiceItem[];
 }
 
-// Invoice Item Type
 export interface InvoiceItem {
     id: string;
     invoice_id: string;
@@ -84,9 +142,44 @@ export interface InvoiceItem {
     unit_price: number;
     tax_rate?: number;
     amount: number;
+    unit?: string;
 }
 
-// Invoice Data for PDF Generation
+export interface Contract {
+    id: string;
+    user_id: string;
+    client_id?: string;
+    title: string;
+    status: 'draft' | 'signed' | 'active' | 'terminated';
+    type: 'service_agreement' | 'nda' | 'employment' | 'general';
+    content: Record<string, any>; // Stores answers/variables
+    html_body?: string;
+    signature_url?: string;
+    counterparty_signature_url?: string;
+    created_at: string;
+    updated_at: string;
+    client?: Client;
+}
+
+export interface ContractTemplateField {
+    id: string;
+    label: string;
+    placeholder?: string;
+    type: 'text' | 'number' | 'date' | 'textarea' | 'select';
+    required?: boolean;
+    options?: string[]; // for select type
+}
+
+export interface ContractTemplate {
+    id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    fields: ContractTemplateField[];
+    created_at: string;
+    updated_at: string;
+}
+
 export interface InvoiceData {
     company: {
         name: string;
@@ -102,6 +195,10 @@ export interface InvoiceData {
         bankAccount?: string;
         bankIban?: string;
         bankSwift?: string;
+        primaryColor?: string;
+        isGrayscale?: boolean;
+        paymentLinkStripe?: string;
+        paymentLinkPaypal?: string;
     };
     client: {
         name: string;
@@ -113,12 +210,19 @@ export interface InvoiceData {
         issueDate: string;
         dueDate: string;
         currency: string;
+        language?: string;
+        notes?: string;
+        terms?: string;
+        buyerSignatureUrl?: string;
+        type?: 'invoice' | 'offer';
+        showBuyerSignature?: boolean;
     };
     items: Array<{
         description: string;
         quantity: number;
         price: number;
         total: number;
+        unit?: string;
     }>;
     summary: {
         subtotal: number;
@@ -126,21 +230,7 @@ export interface InvoiceData {
         discount: number;
         total: number;
     };
+    config?: TemplateConfig;
 }
 
-// Template Types
-export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative';
-
-// Dashboard Stats
-export interface DashboardStats {
-    totalRevenue: number;
-    paidAmount: number;
-    pendingAmount: number;
-    overdueAmount: number;
-    invoiceCount: number;
-    clientCount: number;
-    productCount: number;
-    monthlyRevenue: { month: string; amount: number }[];
-    recentInvoices: Invoice[];
-    topClients: { name: string; total: number }[];
-}
+export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative' | 'receipt';

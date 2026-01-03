@@ -6,6 +6,8 @@
 -- 1. Create Profiles Table (extends auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  company_id UUID,
+  role TEXT DEFAULT 'owner',
   company_name TEXT,
   email TEXT,
   phone TEXT,
@@ -17,6 +19,19 @@ CREATE TABLE IF NOT EXISTS profiles (
   currency TEXT DEFAULT 'USD',
   tax_rate DECIMAL DEFAULT 0,
   tax_name TEXT DEFAULT 'VAT',
+  tax_id TEXT,
+  bank_name TEXT,
+  bank_account TEXT,
+  bank_iban TEXT,
+  bank_swift TEXT,
+  payment_link_stripe TEXT,
+  payment_link_paypal TEXT,
+  invoice_language TEXT DEFAULT 'en',
+  terms_conditions TEXT,
+  primary_color TEXT DEFAULT '#6366f1',
+  is_grayscale BOOLEAN DEFAULT false,
+  biometric_enabled BOOLEAN DEFAULT false,
+  template_config JSONB,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -24,11 +39,18 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS clients (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  company_id UUID,
   name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
   address TEXT,
+  city TEXT,
+  zip_code TEXT,
+  country TEXT,
   tax_id TEXT,
+  discount_percent DECIMAL DEFAULT 0,
+  discount_type TEXT DEFAULT 'percentage',
+  notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -36,37 +58,65 @@ CREATE TABLE IF NOT EXISTS clients (
 CREATE TABLE IF NOT EXISTS products (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  company_id UUID,
   name TEXT NOT NULL,
   description TEXT,
+  sku TEXT,
+  barcode TEXT,
   unit_price DECIMAL NOT NULL DEFAULT 0,
+  tax_rate DECIMAL DEFAULT 0,
+  tax_included BOOLEAN DEFAULT false,
+  unit TEXT DEFAULT 'pcs',
+  category TEXT,
+  stock_quantity DECIMAL DEFAULT 0,
+  track_stock BOOLEAN DEFAULT false,
+  low_stock_threshold DECIMAL DEFAULT 5,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Create Invoice Status Enum
+-- 4. Create Expenses Table
+CREATE TABLE IF NOT EXISTS expenses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  company_id UUID,
+  amount DECIMAL NOT NULL DEFAULT 0,
+  category TEXT NOT NULL DEFAULT 'Other',
+  description TEXT,
+  date DATE DEFAULT CURRENT_DATE,
+  receipt_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Create Invoice Status Enum
 DO $$ BEGIN
   CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue');
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
 
--- 5. Create Invoices Table
+-- 6. Create Invoices Table
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+  company_id UUID,
   client_id UUID REFERENCES clients ON DELETE SET NULL,
   invoice_number TEXT NOT NULL,
   issue_date DATE DEFAULT CURRENT_DATE,
   due_date DATE,
   status invoice_status DEFAULT 'draft',
   discount_amount DECIMAL DEFAULT 0,
+  discount_percent DECIMAL DEFAULT 0,
   tax_amount DECIMAL DEFAULT 0,
   total_amount DECIMAL DEFAULT 0,
   notes TEXT,
   template_id TEXT DEFAULT 'classic',
+  is_recurring BOOLEAN DEFAULT false,
+  recurring_interval TEXT,
+  last_recurring_date DATE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. Create Invoice Items Table
+-- 7. Create Invoice Items Table
 CREATE TABLE IF NOT EXISTS invoice_items (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   invoice_id UUID REFERENCES invoices ON DELETE CASCADE NOT NULL,
@@ -74,7 +124,9 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   description TEXT NOT NULL,
   quantity DECIMAL NOT NULL DEFAULT 1,
   unit_price DECIMAL NOT NULL DEFAULT 0,
-  amount DECIMAL NOT NULL DEFAULT 0
+  tax_rate DECIMAL DEFAULT 0,
+  amount DECIMAL NOT NULL DEFAULT 0,
+  unit TEXT
 );
 
 -- ==============================================
@@ -84,42 +136,56 @@ CREATE TABLE IF NOT EXISTS invoice_items (
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
 
 -- ==============================================
--- RLS Policies
+-- RLS Policies (Updated for Collaboration)
 -- ==============================================
 
 -- Profiles: Users can only access their own profile
-CREATE POLICY "Users can view own profile" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can manage own profile" ON profiles
+  FOR ALL USING (auth.uid() = id);
 
-CREATE POLICY "Users can update own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = id);
+-- Clients: Shared access via company_id
+CREATE POLICY "Company shared clients" ON clients
+  FOR ALL USING (
+    auth.uid() = user_id OR 
+    company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+  );
 
-CREATE POLICY "Users can insert own profile" ON profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
+-- Products: Shared access via company_id
+CREATE POLICY "Company shared products" ON products
+  FOR ALL USING (
+    auth.uid() = user_id OR 
+    company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+  );
 
--- Clients: Users can only access their own clients
-CREATE POLICY "Users can manage own clients" ON clients
-  FOR ALL USING (auth.uid() = user_id);
+-- Expenses: Shared access via company_id
+CREATE POLICY "Company shared expenses" ON expenses
+  FOR ALL USING (
+    auth.uid() = user_id OR 
+    company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+  );
 
--- Products: Users can only access their own products
-CREATE POLICY "Users can manage own products" ON products
-  FOR ALL USING (auth.uid() = user_id);
+-- Invoices: Shared access via company_id
+CREATE POLICY "Company shared invoices" ON invoices
+  FOR ALL USING (
+    auth.uid() = user_id OR 
+    company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+  );
 
--- Invoices: Users can only access their own invoices
-CREATE POLICY "Users can manage own invoices" ON invoices
-  FOR ALL USING (auth.uid() = user_id);
-
--- Invoice Items: Users can access items of their own invoices
-CREATE POLICY "Users can manage own invoice items" ON invoice_items
+-- Invoice Items: Access via invoice shared policy
+CREATE POLICY "Company shared invoice items" ON invoice_items
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM invoices
       WHERE invoices.id = invoice_items.invoice_id
-      AND invoices.user_id = auth.uid()
+      AND (
+        invoices.user_id = auth.uid() OR 
+        invoices.company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid())
+      )
     )
   );
 
@@ -130,23 +196,14 @@ CREATE POLICY "Users can manage own invoice items" ON invoice_items
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email)
-  VALUES (NEW.id, NEW.email);
+  INSERT INTO public.profiles (id, email, company_id)
+  VALUES (NEW.id, NEW.email, NEW.id); -- Default company_id to user id
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Drop trigger if exists and recreate
+-- Recreate trigger if exists
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- ==============================================
--- Storage Buckets (Create via Supabase Dashboard)
--- ==============================================
--- Create these buckets in your Supabase Storage:
--- 1. logos (public)
--- 2. signatures (private)
--- 3. stamps (private)

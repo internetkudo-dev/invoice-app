@@ -5,9 +5,10 @@ import { useTheme } from '../../hooks/useTheme';
 interface InputProps extends TextInputProps {
     label?: string;
     error?: string;
+    containerStyle?: any;
 }
 
-export function Input({ label, error, style, ...props }: InputProps) {
+export function Input({ label, error, containerStyle, style, onChangeText, keyboardType, ...props }: InputProps) {
     const { isDark } = useTheme();
 
     const bgColor = isDark ? '#0f172a' : '#f1f5f9';
@@ -16,8 +17,20 @@ export function Input({ label, error, style, ...props }: InputProps) {
     const borderColor = isDark ? '#334155' : '#cbd5e1';
     const placeholderColor = isDark ? '#64748b' : '#94a3b8';
 
+    const handleChangeText = (text: string) => {
+        if (!onChangeText) return;
+
+        // Handle comma to dot conversion for numeric/decimal inputs
+        if (keyboardType === 'numeric' || keyboardType === 'decimal-pad') {
+            const normalized = text.replace(',', '.');
+            onChangeText(normalized);
+        } else {
+            onChangeText(text);
+        }
+    };
+
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, containerStyle]}>
             {label && <Text style={[styles.label, { color: labelColor }]}>{label}</Text>}
             <TextInput
                 style={[
@@ -27,6 +40,8 @@ export function Input({ label, error, style, ...props }: InputProps) {
                     style,
                 ]}
                 placeholderTextColor={placeholderColor}
+                onChangeText={handleChangeText}
+                keyboardType={keyboardType}
                 {...props}
             />
             {error && <Text style={styles.error}>{error}</Text>}
