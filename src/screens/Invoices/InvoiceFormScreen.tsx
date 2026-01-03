@@ -9,8 +9,9 @@ import {
     Alert,
     StyleSheet,
     Switch,
+    TextInput,
 } from 'react-native';
-import { ArrowLeft, Plus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact } from 'lucide-react-native';
+import { ArrowLeft, Plus, Minus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SvgXml } from 'react-native-svg';
 import { t } from '../../i18n';
@@ -317,12 +318,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 buyer_signature_url: formData.buyer_signature_url,
             };
 
+            console.log('Saving invoice:', invoiceData);
+
             let savedId = invoiceId;
             if (isEditing) {
-                await supabase.from('invoices').update(invoiceData).eq('id', invoiceId);
+                const { error } = await supabase.from('invoices').update(invoiceData).eq('id', invoiceId);
+                if (error) throw error;
                 await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
             } else {
-                const { data } = await supabase.from('invoices').insert(invoiceData).select().single();
+                const { data, error } = await supabase.from('invoices').insert(invoiceData).select().single();
+                console.log('Insert result:', { data, error });
+                if (error) throw error;
                 savedId = data?.id;
             }
 
@@ -339,11 +345,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     amount: it.amount,
                 }));
 
-            await supabase.from('invoice_items').insert(itemsToInsert);
+            if (itemsToInsert.length > 0) {
+                const { error: itemsError } = await supabase.from('invoice_items').insert(itemsToInsert);
+                if (itemsError) console.error('Error saving items:', itemsError);
+            }
+
+            console.log('Invoice saved successfully:', savedId);
+            setLoading(false);
             navigation.goBack();
-        } catch (error) {
-            Alert.alert('Error', 'Failed to save invoice');
-        } finally {
+        } catch (error: any) {
+            console.error('Error saving invoice:', error);
+            Alert.alert('Error', 'Failed to save invoice: ' + error.message);
             setLoading(false);
         }
     };
@@ -484,22 +496,43 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </View>
 
                         <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Input label="Qty" value={String(item.quantity)} onChangeText={t => updateLineItem(item.id, 'quantity', Number(t) || 1)} keyboardType="numeric" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ marginBottom: 8 }}><Text style={[styles.tinyLabel, { color: mutedColor }]}>Unit</Text></View>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 40 }}>
-                                    {units.map(u => (
-                                        <TouchableOpacity key={u} style={[styles.unitChip, item.unit === u && styles.activeUnit]} onPress={() => updateLineItem(item.id, 'unit', u)}>
-                                            <Text style={[styles.unitText, item.unit === u && styles.activeUnitText]}>{u}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                            <View style={{ flex: 1.2 }}>
+                                <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>Qty</Text>
+                                <View style={styles.qtyContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.qtyBtn, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}
+                                        onPress={() => updateLineItem(item.id, 'quantity', Math.max(1, item.quantity - 1))}
+                                    >
+                                        <Minus color={textColor} size={16} />
+                                    </TouchableOpacity>
+                                    <TextInput
+                                        style={[styles.qtyInput, { backgroundColor: inputBg, color: textColor }]}
+                                        value={String(item.quantity)}
+                                        onChangeText={(t: string) => updateLineItem(item.id, 'quantity', Number(t) || 1)}
+                                        keyboardType="numeric"
+                                        textAlign="center"
+                                    />
+                                    <TouchableOpacity
+                                        style={[styles.qtyBtn, { backgroundColor: primaryColor }]}
+                                        onPress={() => updateLineItem(item.id, 'quantity', item.quantity + 1)}
+                                    >
+                                        <Plus color="#fff" size={16} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                             <View style={{ flex: 1.5 }}>
                                 <Input label="Price" value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
                             </View>
+                        </View>
+                        <View style={{ marginTop: 8 }}>
+                            <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>Unit</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                {units.map(u => (
+                                    <TouchableOpacity key={u} style={[styles.unitChip, item.unit === u && styles.activeUnit]} onPress={() => updateLineItem(item.id, 'unit', u)}>
+                                        <Text style={[styles.unitText, item.unit === u && styles.activeUnitText]}>{u}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
                         </View>
                         <View style={styles.itemTotal}>
                             <Text style={{ color: mutedColor }}>Amount: </Text>
@@ -623,7 +656,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 onClose={() => setShowScanner(false)}
                 onScanned={handleBarcodeScanned}
             />
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingView >
     );
 }
 
@@ -699,4 +732,7 @@ const styles = StyleSheet.create({
     signaturePreviewContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     signaturePreviewImg: { opacity: 0.5 },
     clearSignature: { padding: 8 },
+    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    qtyBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    qtyInput: { flex: 1, height: 40, borderRadius: 10, paddingHorizontal: 12, fontSize: 16, fontWeight: '600' },
 });

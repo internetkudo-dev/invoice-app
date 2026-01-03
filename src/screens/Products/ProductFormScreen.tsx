@@ -135,12 +135,12 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                 console.log('Insert result:', { data, error });
                 if (error) throw error;
             }
+            setLoading(false);
             navigation.goBack();
         } catch (error) {
             console.error('Error saving product:', error);
-            Alert.alert('Error', 'Failed to save product: ' + (error as any).message);
-        } finally {
             setLoading(false);
+            Alert.alert('Error', 'Failed to save product: ' + (error as any).message);
         }
     };
 

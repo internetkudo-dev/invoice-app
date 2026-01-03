@@ -79,6 +79,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         let data = [];
 
         if (selectedType === 'invoice' || selectedType === 'offer') {
+            console.log('Fetching invoices for type:', selectedType, 'user:', user.id, 'companyId:', companyId);
             const { data: invData, error } = await supabase
                 .from('invoices')
                 .select(`*, client:clients(name)`)
@@ -86,6 +87,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 .eq('type', selectedType)
                 .order('created_at', { ascending: false });
 
+            console.log('Invoices fetched:', invData?.length, 'error:', error);
             if (error) console.error('Error fetching invoices:', error);
             data = invData || [];
         } else if (selectedType === 'contract') {
@@ -147,8 +149,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             return (
                 <TouchableOpacity
                     activeOpacity={0.7}
-                    // TODO: Create ContractDetail screen
-                    onPress={() => navigation.navigate('ContractForm', { contractId: item.id })}
+                    onPress={() => navigation.navigate('ContractDetail', { contractId: item.id })}
                 >
                     <Card style={styles.invoiceCard}>
                         <View style={styles.invoiceHeader}>

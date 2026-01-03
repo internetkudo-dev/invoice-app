@@ -6,18 +6,20 @@ import {
     StyleSheet,
     ViewStyle,
     View,
+    Platform,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 
 interface ButtonProps {
     title: string;
     onPress: () => void;
-    variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost';
+    variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success';
     loading?: boolean;
     disabled?: boolean;
     style?: ViewStyle;
     size?: 'small' | 'medium' | 'large';
     icon?: any;
+    fullWidth?: boolean;
 }
 
 export function Button({
@@ -29,21 +31,37 @@ export function Button({
     style,
     size = 'medium',
     icon: Icon,
+    fullWidth = true,
 }: ButtonProps) {
-    const { primaryColor } = useTheme();
+    const { primaryColor, isDark } = useTheme();
 
     const getButtonStyle = () => {
         switch (variant) {
             case 'secondary':
-                return { backgroundColor: `${primaryColor}20` };
+                return { backgroundColor: `${primaryColor}15` };
             case 'danger':
                 return styles.danger;
+            case 'success':
+                return styles.success;
             case 'outline':
-                return [styles.outline, { borderColor: primaryColor }];
+                return [styles.outline, { borderColor: isDark ? '#334155' : '#e2e8f0' }];
             case 'ghost':
                 return styles.ghost;
             default:
-                return { backgroundColor: primaryColor };
+                return {
+                    backgroundColor: primaryColor,
+                    ...Platform.select({
+                        ios: {
+                            shadowColor: primaryColor,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                        },
+                        android: {
+                            elevation: 4,
+                        },
+                    }),
+                };
         }
     };
 
@@ -52,7 +70,7 @@ export function Button({
             case 'secondary':
                 return { color: primaryColor };
             case 'outline':
-                return { color: primaryColor };
+                return { color: isDark ? '#fff' : '#1e293b' };
             case 'ghost':
                 return { color: primaryColor };
             default:
@@ -75,17 +93,24 @@ export function Button({
 
     return (
         <TouchableOpacity
-            style={[styles.button, getButtonStyle(), getSizeStyle(), disabled && styles.disabled, style]}
+            style={[
+                styles.button,
+                getButtonStyle(),
+                getSizeStyle(),
+                disabled && styles.disabled,
+                !fullWidth && { alignSelf: 'flex-start' },
+                style
+            ]}
             onPress={onPress}
             disabled={disabled || loading}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
         >
             {loading ? (
-                <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : primaryColor} size="small" />
+                <ActivityIndicator color={variant === 'primary' || variant === 'danger' || variant === 'success' ? '#fff' : primaryColor} size="small" />
             ) : (
                 <View style={styles.content}>
-                    {Icon && <Icon size={size === 'small' ? 14 : 18} color={iconColor} />}
-                    <Text style={[styles.text, getTextStyle(), { fontSize: size === 'small' ? 13 : 15 }]}>{title}</Text>
+                    {Icon && <Icon size={size === 'small' ? 14 : size === 'large' ? 20 : 18} color={iconColor} />}
+                    <Text style={[styles.text, getTextStyle(), { fontSize: size === 'small' ? 13 : size === 'large' ? 17 : 15 }]}>{title}</Text>
                 </View>
             )}
         </TouchableOpacity>
@@ -94,7 +119,7 @@ export function Button({
 
 const styles = StyleSheet.create({
     button: {
-        borderRadius: 12,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 48,
@@ -103,38 +128,66 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 10,
     },
     small: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        minHeight: 36,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        minHeight: 40,
+        borderRadius: 10,
     },
     medium: {
         paddingVertical: 14,
-        paddingHorizontal: 20,
-        minHeight: 48,
+        paddingHorizontal: 24,
+        minHeight: 52,
     },
     large: {
         paddingVertical: 18,
-        paddingHorizontal: 24,
-        minHeight: 56,
+        paddingHorizontal: 32,
+        minHeight: 60,
+        borderRadius: 16,
     },
     outline: {
         backgroundColor: 'transparent',
-        borderWidth: 1,
+        borderWidth: 1.5,
     },
     ghost: {
         backgroundColor: 'transparent',
     },
     danger: {
         backgroundColor: '#ef4444',
+        ...Platform.select({
+            ios: {
+                shadowColor: '#ef4444',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+            },
+            android: {
+                elevation: 4,
+            },
+        }),
+    },
+    success: {
+        backgroundColor: '#10b981',
+        ...Platform.select({
+            ios: {
+                shadowColor: '#10b981',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+            },
+            android: {
+                elevation: 4,
+            },
+        }),
     },
     disabled: {
-        opacity: 0.6,
+        opacity: 0.5,
     },
     text: {
-        fontWeight: 'bold',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     primaryText: {
         color: '#fff',

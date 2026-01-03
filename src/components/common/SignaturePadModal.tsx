@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { View, Modal, StyleSheet, TouchableOpacity, Text, PanResponder, Dimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { X, Check, Trash2 } from 'lucide-react-native';
@@ -11,49 +11,48 @@ interface SignaturePadModalProps {
 }
 
 export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: SignaturePadModalProps) {
-    const [path, setPath] = useState<string>('');
+    const [currentPath, setCurrentPath] = useState<string>('');
     const [paths, setPaths] = useState<string[]>([]);
     const [layout, setLayout] = useState({ width: 0, height: 0 });
+    const pathRef = useRef<string>('');
 
-    // Convert paths to SVG path string format
-    const currentPath = useRef<string>('');
-
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderGrant: (evt) => {
-                const { locationX, locationY } = evt.nativeEvent;
-                currentPath.current = `M${locationX.toFixed(0)},${locationY.toFixed(0)}`;
-                setPath(currentPath.current);
-            },
-            onPanResponderMove: (evt) => {
-                const { locationX, locationY } = evt.nativeEvent;
-                const newPoint = `L${locationX.toFixed(0)},${locationY.toFixed(0)}`;
-                currentPath.current += newPoint;
-                setPath(currentPath.current);
-            },
-            onPanResponderRelease: () => {
-                if (currentPath.current) {
-                    setPaths(prev => [...prev, currentPath.current]);
-                    setPath('');
-                    currentPath.current = '';
-                }
-            },
-            onPanResponderTerminate: () => {
-                if (currentPath.current) {
-                    setPaths(prev => [...prev, currentPath.current]);
-                    setPath('');
-                    currentPath.current = '';
-                }
-            },
-        })
-    ).current;
+    const panResponder = useMemo(
+        () =>
+            PanResponder.create({
+                onStartShouldSetPanResponder: () => true,
+                onMoveShouldSetPanResponder: () => true,
+                onPanResponderGrant: (evt) => {
+                    const { locationX, locationY } = evt.nativeEvent;
+                    pathRef.current = `M${locationX.toFixed(0)},${locationY.toFixed(0)}`;
+                    setCurrentPath(pathRef.current);
+                },
+                onPanResponderMove: (evt) => {
+                    const { locationX, locationY } = evt.nativeEvent;
+                    pathRef.current += ` L${locationX.toFixed(0)},${locationY.toFixed(0)}`;
+                    setCurrentPath(pathRef.current);
+                },
+                onPanResponderRelease: () => {
+                    if (pathRef.current) {
+                        setPaths((prev) => [...prev, pathRef.current]);
+                    }
+                    pathRef.current = '';
+                    setCurrentPath('');
+                },
+                onPanResponderTerminate: () => {
+                    if (pathRef.current) {
+                        setPaths((prev) => [...prev, pathRef.current]);
+                    }
+                    pathRef.current = '';
+                    setCurrentPath('');
+                },
+            }),
+        []
+    );
 
     const handleClear = () => {
         setPaths([]);
-        setPath('');
-        currentPath.current = '';
+        setCurrentPath('');
+        pathRef.current = '';
     };
 
     const handleSave = () => {
@@ -110,9 +109,9 @@ export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: Si
                             {paths.map((d, i) => (
                                 <Path key={i} d={d} stroke="black" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                             ))}
-                            <Path d={path} stroke="black" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            <Path d={currentPath} stroke="black" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
                         </Svg>
-                        {paths.length === 0 && path === '' && (
+                        {paths.length === 0 && currentPath === '' && (
                             <Text style={styles.placeholder}>Draw your signature here</Text>
                         )}
                     </View>

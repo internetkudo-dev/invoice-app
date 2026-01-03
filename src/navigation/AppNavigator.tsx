@@ -99,6 +99,8 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
     );
 }
 
+import { ContractDetailScreen } from '../screens/Contracts/ContractDetailScreen';
+
 function InvoicesStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -106,6 +108,7 @@ function InvoicesStack() {
             <Stack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
             <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
             <Stack.Screen name="ContractForm" component={ContractFormScreen} />
+            <Stack.Screen name="ContractDetail" component={ContractDetailScreen} />
         </Stack.Navigator>
     );
 }
@@ -161,6 +164,7 @@ function RootStack() {
 
 import { ContractTemplatesScreen } from '../screens/Settings/Contracts/ContractTemplatesScreen';
 import { ContractTemplateEditorScreen } from '../screens/Settings/Contracts/ContractTemplateEditorScreen';
+import { InvoiceTemplateSettingsScreen } from '../screens/Settings/Templates/InvoiceTemplateSettingsScreen';
 
 function SettingsStack() {
     return (
@@ -169,6 +173,7 @@ function SettingsStack() {
             <Stack.Screen name="TemplateEditor" component={TemplateEditorScreen} />
             <Stack.Screen name="ContractTemplates" component={ContractTemplatesScreen} />
             <Stack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
+            <Stack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
         </Stack.Navigator>
     );
 }

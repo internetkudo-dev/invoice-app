@@ -19,7 +19,6 @@ interface FABProps {
 
 export function FAB({ onPress, actions, icon: CustomIcon, color }: FABProps) {
     const { primaryColor, isDark } = useTheme();
-    // ...
     const [isOpen, setIsOpen] = useState(false);
     const [animation] = useState(new Animated.Value(0));
 

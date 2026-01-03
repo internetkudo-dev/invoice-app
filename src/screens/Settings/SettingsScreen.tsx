@@ -311,6 +311,13 @@ export function SettingsScreen({ navigation }: any) {
                             onPress={() => navigation.navigate('ContractTemplates')}
                             style={{ marginTop: 8 }}
                         />
+                        <Button
+                            title="Invoice Template Settings"
+                            variant="outline"
+                            icon={FileText}
+                            onPress={() => navigation.navigate('InvoiceTemplateSettings')}
+                            style={{ marginTop: 8 }}
+                        />
                     </Card>
                 )}
 

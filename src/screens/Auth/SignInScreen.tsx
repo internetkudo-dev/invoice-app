@@ -119,7 +119,6 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     </View>
 
 
-                    // ... inside the component
                     <TouchableOpacity
                         style={styles.googleButton}
                         onPress={async () => {
