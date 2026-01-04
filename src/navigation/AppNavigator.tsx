@@ -103,6 +103,11 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
 
 import { ContractDetailScreen } from '../screens/Contracts/ContractDetailScreen';
 import { FaturatScreen } from '../screens/Invoices/FaturatScreen';
+import { PaymentFormScreen, PaymentsListScreen } from '../screens/Payments';
+import { CustomerLedgerScreen } from '../screens/Reports/CustomerLedgerScreen';
+import { VendorLedgerScreen } from '../screens/Reports/VendorLedgerScreen';
+import { VendorFormScreen, VendorsScreen, SupplierBillFormScreen, SupplierBillsListScreen, ScanBillScreen } from '../screens/Vendors';
+import { VendorPaymentFormScreen, VendorPaymentsListScreen } from '../screens/VendorPayments';
 
 function InvoicesStack() {
     return (
@@ -114,6 +119,18 @@ function InvoicesStack() {
             <Stack.Screen name="ContractForm" component={ContractFormScreen} />
             <Stack.Screen name="ContractDetail" component={ContractDetailScreen} />
             <Stack.Screen name="ReportPreview" component={ReportPreviewScreen} />
+            <Stack.Screen name="PaymentForm" component={PaymentFormScreen} />
+            <Stack.Screen name="PaymentsList" component={PaymentsListScreen} />
+            <Stack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
+            <Stack.Screen name="VendorLedger" component={VendorLedgerScreen} />
+            <Stack.Screen name="VendorForm" component={VendorFormScreen} />
+            <Stack.Screen name="VendorsList" component={VendorsScreen} />
+            <Stack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
+            <Stack.Screen name="VendorPaymentsList" component={VendorPaymentsListScreen} />
+            <Stack.Screen name="SupplierBillForm" component={SupplierBillFormScreen} />
+            <Stack.Screen name="SupplierBillsList" component={SupplierBillsListScreen} />
+            <Stack.Screen name="ScanBill" component={ScanBillScreen} />
+            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
         </Stack.Navigator>
     );
 }
@@ -122,14 +139,55 @@ import { ReportPreviewScreen } from '../screens/Reports/ReportPreviewScreen';
 
 import { ManagementDashboardScreen } from '../screens/Management/ManagementDashboardScreen';
 
+import { ClientsScreen } from '../screens/Clients/ClientsScreen';
+import { ProductsScreen } from '../screens/Products/ProductsScreen';
+import { ExpensesScreen } from '../screens/Expenses/ExpensesScreen';
+
+import { EmployeeDirectoryScreen } from '../screens/Employees/EmployeeDirectoryScreen';
+import { EmployeeFormScreen } from '../screens/Employees/EmployeeFormScreen';
+import { EmployeeVaultScreen } from '../screens/Employees/EmployeeVaultScreen';
+import { AttendanceScreen } from '../screens/Time/AttendanceScreen';
+import { LeaveRequestScreen } from '../screens/Time/LeaveRequestScreen';
+import { ScheduleScreen } from '../screens/Time/ScheduleScreen';
+import { PayrollDashboardScreen } from '../screens/Payroll/PayrollDashboardScreen';
+import { ComplianceScreen } from '../screens/Payroll/ComplianceScreen';
+
 function ManagementStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="ManagementDashboard" component={ManagementDashboardScreen} />
             <Stack.Screen name="ManagementTabs" component={ManagementScreen} />
+            <Stack.Screen name="ManagementDashboard" component={ManagementDashboardScreen} />
+
+            {/* Legacy Operations */}
+            <Stack.Screen name="ClientsList" component={ClientsScreen} />
+            <Stack.Screen name="ProductsList" component={ProductsScreen} />
+            <Stack.Screen name="VendorsList" component={VendorsScreen} />
+            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+            <Stack.Screen name="ExpensesList" component={ExpensesScreen} />
+
+            {/* Forms */}
             <Stack.Screen name="ClientForm" component={ClientFormScreen} />
             <Stack.Screen name="ProductForm" component={ProductFormScreen} />
-            <Stack.Screen name="ExpenseForm" component={ExpenseFormScreen} />
+            <Stack.Screen name="VendorForm" component={VendorFormScreen} />
+            <Stack.Screen name="VendorPaymentForm" component={VendorPaymentFormScreen} />
+
+            {/* Ledgers */}
+            <Stack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
+            <Stack.Screen name="VendorLedger" component={VendorLedgerScreen} />
+
+            {/* HR Core */}
+            <Stack.Screen name="EmployeeDirectory" component={EmployeeDirectoryScreen} />
+            <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
+            <Stack.Screen name="EmployeeVault" component={EmployeeVaultScreen} />
+
+            {/* Time */}
+            <Stack.Screen name="Attendance" component={AttendanceScreen} />
+            <Stack.Screen name="LeaveRequests" component={LeaveRequestScreen} />
+            <Stack.Screen name="Schedule" component={ScheduleScreen} />
+
+            {/* Finance */}
+            <Stack.Screen name="Payroll" component={PayrollDashboardScreen} />
+            <Stack.Screen name="Compliance" component={ComplianceScreen} />
         </Stack.Navigator>
     );
 }
@@ -207,6 +265,7 @@ function SettingsStack() {
 }
 
 import { ManageCompaniesScreen } from '../screens/Settings/ManageCompaniesScreen';
+import { JoinTeamScreen } from '../screens/Auth/JoinTeamScreen';
 
 function AuthStack() {
     return (
@@ -222,9 +281,11 @@ function AuthStack() {
                 {(props: any) => (
                     <SignUpScreen
                         onNavigateToSignIn={() => props.navigation.navigate('SignIn')}
+                        navigation={props.navigation}
                     />
                 )}
             </Stack.Screen>
+            <Stack.Screen name="JoinTeam" component={JoinTeamScreen} />
         </Stack.Navigator>
     );
 }

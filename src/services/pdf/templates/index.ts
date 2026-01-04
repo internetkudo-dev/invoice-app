@@ -4,3 +4,4 @@ export { minimalistTemplate } from './minimalist';
 export { corporateTemplate } from './corporate';
 export { creativeTemplate } from './creative';
 export { receiptTemplate } from './receipt';
+export { kosovoTemplate } from './kosovo';

@@ -7,3 +7,4 @@ export * from './TemplatePreview';
 export * from './QuickAddModal';
 export * from './BarcodeScannerModal';
 export * from './SignaturePadModal';
+export * from './LoadingOverlay';

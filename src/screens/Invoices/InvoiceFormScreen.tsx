@@ -58,6 +58,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const documentSubtype = route.params?.subtype || 'regular';
     const documentKey = route.params?.documentKey || 'regularInvoice';
 
+    // Forced template and page size for fiscal invoices
+    const forceTemplate = route.params?.forceTemplate; // 'kosovo' for Faturë e Rregullt
+    const forcePageSize = route.params?.forcePageSize; // 'A4' for Faturë e Rregullt
+    const isFiscalInvoice = !!forceTemplate;
+
     // Document type configurations
     const documentConfigs: Record<string, {
         prefix: string;
@@ -89,6 +94,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [showQuickProduct, setShowQuickProduct] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
     const [showSignaturePad, setShowSignaturePad] = useState(false);
+    const [showProductDropdown, setShowProductDropdown] = useState<string | null>(null);
     const [activeRowId, setActiveRowId] = useState<string | null>(null);
     const [currency, setCurrency] = useState('USD');
     const [defaultTaxRate, setDefaultTaxRate] = useState(0);
@@ -134,6 +140,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 ...prev,
                 type: documentType,
                 subtype: documentSubtype,
+                // Apply forced page size for fiscal invoices
+                paper_size: forcePageSize || prev.paper_size,
             }));
             generateInvoiceNumber();
         }
@@ -155,7 +163,18 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             setCurrency(profile.currency || 'USD');
             setDefaultTaxRate(profile.tax_rate || 0);
 
-            if (profile.template_config?.pageSize) {
+            // AUTO-APPLY DEFAULT DISCOUNT
+            if (!isEditing && profile.default_client_discount) {
+                setFormData(prev => ({ ...prev, discount_percent: Number(profile.default_client_discount) }));
+            }
+
+            // AUTO-APPLY DEFAULT DISCOUNT
+            if (!isEditing && profile.default_client_discount) {
+                setFormData(prev => ({ ...prev, discount_percent: Number(profile.default_client_discount) }));
+            }
+
+            if (profile.template_config?.pageSize && !forcePageSize) {
+                // Only apply profile page size if not a fiscal invoice with forced size
                 setFormData(prev => ({ ...prev, paper_size: profile.template_config.pageSize }));
             }
 
@@ -305,6 +324,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             }
             return i;
         }));
+        setShowProductDropdown(null);
     };
 
     const handleQuickAddClient = async (data: any) => {
@@ -395,6 +415,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 amount_received: formData.amount_received,
                 change_amount: calculateChange(),
                 paper_size: formData.paper_size,
+                // Force kosovo template for fiscal invoices
+                template_id: forceTemplate || 'classic',
             };
 
             console.log('Saving invoice:', invoiceData);
@@ -588,7 +610,53 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </View>
                         <View style={styles.row}>
                             <View style={{ flex: 1 }}>
-                                <Input label={t('description', language)} value={item.description} onChangeText={t => updateLineItem(item.id, 'description', t)} />
+                                <Input
+                                    label={t('description', language)}
+                                    value={item.description}
+                                    onChangeText={t => {
+                                        updateLineItem(item.id, 'description', t);
+                                        if (t.length > 1) setShowProductDropdown(item.id);
+                                        else setShowProductDropdown(null);
+                                    }}
+                                    onFocus={() => {
+                                        if (item.description.length > 0) setShowProductDropdown(item.id);
+                                    }}
+                                />
+                                {showProductDropdown === item.id && (
+                                    <View style={[styles.productDropdown, { backgroundColor: cardBg, borderColor }]}>
+                                        <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                                            {products.filter(p =>
+                                                p.name.toLowerCase().includes(item.description.toLowerCase()) ||
+                                                p.sku?.toLowerCase().includes(item.description.toLowerCase()) ||
+                                                p.barcode?.includes(item.description)
+                                            ).map(p => (
+                                                <TouchableOpacity
+                                                    key={p.id}
+                                                    style={[styles.productDropdownItem, { borderBottomColor: borderColor }]}
+                                                    onPress={() => selectProduct(item, p)}
+                                                >
+                                                    <View>
+                                                        <Text style={{ color: textColor, fontWeight: 'bold' }}>{p.name}</Text>
+                                                        <Text style={{ color: mutedColor, fontSize: 10 }}>{p.sku || p.barcode || ''} • {formatCurrency(Number(p.unit_price))}</Text>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            ))}
+                                            <TouchableOpacity
+                                                style={[styles.productDropdownItem, { borderBottomWidth: 0 }]}
+                                                onPress={() => {
+                                                    setActiveRowId(item.id);
+                                                    setShowQuickProduct(true);
+                                                    setShowProductDropdown(null);
+                                                }}
+                                            >
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                    <Plus color={primaryColor} size={16} />
+                                                    <Text style={{ color: primaryColor, fontWeight: 'bold' }}>{t('addItem', language)}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        </ScrollView>
+                                    </View>
+                                )}
                             </View>
                             <TouchableOpacity
                                 style={[styles.smallActionBtn, { marginTop: 24, backgroundColor: `${currentConfig.color}10` }]}
@@ -780,20 +848,28 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 {/* Paper Size Selector */}
                 <Card style={[styles.section, { backgroundColor: cardBg }]}>
                     <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 12 }]}>{t('paperSize', language) || 'Paper Size'}</Text>
-                    <View style={styles.paymentMethodsRow}>
-                        {['A4', 'A5', 'Receipt'].map(size => (
-                            <TouchableOpacity
-                                key={size}
-                                style={[
-                                    styles.paymentMethodChip,
-                                    { borderColor: formData.paper_size === size ? primaryColor : borderColor, backgroundColor: formData.paper_size === size ? `${primaryColor}15` : 'transparent' }
-                                ]}
-                                onPress={() => setFormData(prev => ({ ...prev, paper_size: size as any }))}
-                            >
-                                <Text style={[styles.paymentMethodText, { color: formData.paper_size === size ? primaryColor : mutedColor }]}>{size}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    {isFiscalInvoice ? (
+                        <View style={styles.paymentMethodsRow}>
+                            <View style={[styles.paymentMethodChip, { borderColor: primaryColor, backgroundColor: `${primaryColor}15` }]}>
+                                <Text style={[styles.paymentMethodText, { color: primaryColor }]}>A4 (Dokument Fiskal)</Text>
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={styles.paymentMethodsRow}>
+                            {['A4', 'A5', 'Receipt'].map(size => (
+                                <TouchableOpacity
+                                    key={size}
+                                    style={[
+                                        styles.paymentMethodChip,
+                                        { borderColor: formData.paper_size === size ? primaryColor : borderColor, backgroundColor: formData.paper_size === size ? `${primaryColor}15` : 'transparent' }
+                                    ]}
+                                    onPress={() => setFormData(prev => ({ ...prev, paper_size: size as any }))}
+                                >
+                                    <Text style={[styles.paymentMethodText, { color: formData.paper_size === size ? primaryColor : mutedColor }]}>{size}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
                 </Card>
 
                 <Button
@@ -1019,6 +1095,24 @@ const styles = StyleSheet.create({
     cashCalculation: { marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
     changeValue: { fontSize: 20, fontWeight: 'bold', marginTop: 8 },
     divider: { height: 1, backgroundColor: '#334155', marginVertical: 16, opacity: 0.1 },
+    productDropdown: {
+        position: 'absolute',
+        top: 70,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        borderRadius: 12,
+        borderWidth: 1,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    productDropdownItem: {
+        padding: 12,
+        borderBottomWidth: 1,
+    },
     previewCard: { padding: 30, marginBottom: 20, alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 16 },
     previewDocument: { padding: 20, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
     previewHeader: { flexDirection: 'row', justifyContent: 'space-between' },

@@ -18,6 +18,7 @@ export interface Profile {
     bank_swift?: string;
     primary_color: string;
     is_grayscale: boolean;
+    default_client_discount?: number;
     // New fields
     payment_link_stripe?: string;
     payment_link_paypal?: string;
@@ -150,6 +151,82 @@ export interface InvoiceItem {
     unit?: string;
 }
 
+export interface Payment {
+    id: string;
+    user_id: string;
+    company_id?: string;
+    client_id?: string;
+    invoice_id?: string;
+    payment_number: string;
+    amount: number;
+    payment_date: string;
+    payment_method: PaymentMethod;
+    bank_reference?: string;
+    notes?: string;
+    created_at: string;
+    client?: Client;
+    invoice?: Invoice;
+}
+
+export interface Vendor {
+    id: string;
+    user_id: string;
+    company_id?: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    zip_code?: string;
+    country?: string;
+    tax_id?: string;
+    notes?: string;
+    created_at: string;
+}
+
+export interface VendorPayment {
+    id: string;
+    user_id: string;
+    company_id?: string;
+    vendor_id?: string;
+    payment_number: string;
+    amount: number;
+    payment_date: string;
+    payment_method: PaymentMethod;
+    bank_reference?: string;
+    description?: string;
+    notes?: string;
+    created_at: string;
+    vendor?: Vendor;
+}
+
+export interface SupplierBill {
+    id: string;
+    user_id: string;
+    company_id?: string;
+    vendor_id: string;
+    bill_number: string;
+    issue_date: string;
+    due_date?: string;
+    total_amount: number;
+    tax_amount: number;
+    status: 'unpaid' | 'paid' | 'partial';
+    notes?: string;
+    document_url?: string;
+    created_at: string;
+    vendor?: Vendor;
+    items?: SupplierBillItem[];
+}
+
+export interface SupplierBillItem {
+    id: string;
+    bill_id: string;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    amount: number;
+}
+
 export interface Contract {
     id: string;
     user_id: string;
@@ -193,6 +270,8 @@ export interface InvoiceData {
         phone?: string;
         website?: string;
         taxId?: string;
+        businessId?: string;
+        vatNumber?: string;
         logoUrl?: string;
         signatureUrl?: string;
         stampUrl?: string;
@@ -209,6 +288,12 @@ export interface InvoiceData {
         name: string;
         address: string;
         email: string;
+        phone?: string;
+        taxId?: string;
+        vatNumber?: string;
+        deliveryName?: string;
+        deliveryAddress?: string;
+        deliveryContact?: string;
     };
     details: {
         number: string;
@@ -224,6 +309,13 @@ export interface InvoiceData {
         paymentMethod?: PaymentMethod;
         amountReceived?: number;
         changeAmount?: number;
+        // Kosovo invoice fields
+        department?: string;
+        reference?: string;
+        yourReference?: string;
+        paymentTerms?: string;
+        amountInWords?: string;
+        deliveryMethod?: string;
     };
     items: Array<{
         description: string;
@@ -231,6 +323,9 @@ export interface InvoiceData {
         price: number;
         total: number;
         unit?: string;
+        sku?: string;
+        discount?: number;
+        taxRate?: number;
     }>;
     summary: {
         subtotal: number;
@@ -239,11 +334,12 @@ export interface InvoiceData {
         total: number;
         amountReceived?: number;
         changeAmount?: number;
+        discountPercent?: number;
     };
     config?: TemplateConfig;
 }
 
-export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative' | 'receipt';
+export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative' | 'receipt' | 'kosovo';
 
 export interface Company {
     id: string;

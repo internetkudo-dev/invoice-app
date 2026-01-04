@@ -10,22 +10,23 @@ import {
     Platform,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { ArrowLeft, User, Percent, FileText, MapPin, Globe } from 'lucide-react-native';
+import { ArrowLeft, Building2, MapPin, Globe, FileText } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, Input } from '../../components/common';
+import { t } from '../../i18n';
 
-interface ClientFormScreenProps {
+interface VendorFormScreenProps {
     navigation: any;
     route: any;
 }
 
-export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
+export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
-    const clientId = route.params?.clientId;
-    const isEditing = !!clientId;
+    const { isDark, language } = useTheme();
+    const vendorId = route.params?.vendorId;
+    const isEditing = !!vendorId;
 
     const [formData, setFormData] = useState({
         name: '',
@@ -36,7 +37,6 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
         zip_code: '',
         country: '',
         tax_id: '',
-        discount_percent: 0,
         notes: '',
     });
     const [loading, setLoading] = useState(false);
@@ -47,11 +47,11 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
     const cardBg = isDark ? '#1e293b' : '#ffffff';
 
     useEffect(() => {
-        if (isEditing) fetchClient();
-    }, [clientId]);
+        if (isEditing) fetchVendor();
+    }, [vendorId]);
 
-    const fetchClient = async () => {
-        const { data } = await supabase.from('clients').select('*').eq('id', clientId).single();
+    const fetchVendor = async () => {
+        const { data } = await supabase.from('vendors').select('*').eq('id', vendorId).single();
         if (data) setFormData({
             name: data.name || '',
             email: data.email || '',
@@ -61,51 +61,29 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             zip_code: data.zip_code || '',
             country: data.country || '',
             tax_id: data.tax_id || '',
-            discount_percent: data.discount_percent || 0,
             notes: data.notes || '',
         });
     };
 
     const handleSave = async () => {
         if (!formData.name) {
-            Alert.alert('Error', 'Name is required');
+            Alert.alert(t('error', language), 'Name is required');
             return;
         }
 
         setLoading(true);
         try {
-            const { data: profileData, error: profileError } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user?.id).single();
-
-            if (profileError) {
-                console.error('Profile fetch error:', profileError);
-                Alert.alert('Error', 'Failed to load profile: ' + profileError.message);
-                setLoading(false);
-                return;
-            }
-
+            const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user?.id).single();
             const companyId = profileData?.active_company_id || profileData?.company_id || user?.id;
 
             if (isEditing) {
-                const { error } = await supabase.from('clients').update(formData).eq('id', clientId);
-                if (error) {
-                    console.error('Update error:', error);
-                    Alert.alert('Error', 'Failed to update client: ' + error.message);
-                    setLoading(false);
-                    return;
-                }
+                await supabase.from('vendors').update(formData).eq('id', vendorId);
             } else {
-                const { error } = await supabase.from('clients').insert({ ...formData, user_id: user?.id, company_id: companyId });
-                if (error) {
-                    console.error('Insert error:', error);
-                    Alert.alert('Error', 'Failed to create client: ' + error.message);
-                    setLoading(false);
-                    return;
-                }
+                await supabase.from('vendors').insert({ ...formData, user_id: user?.id, company_id: companyId });
             }
             navigation.goBack();
-        } catch (error: any) {
-            console.error('Exception:', error);
-            Alert.alert('Error', 'Failed to save client: ' + (error.message || 'Unknown error'));
+        } catch (error) {
+            Alert.alert(t('error', language), 'Failed to save vendor');
         } finally {
             setLoading(false);
         }
@@ -120,17 +98,19 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{isEditing ? 'Edit Client' : 'New Client'}</Text>
+                <Text style={[styles.title, { color: textColor }]}>
+                    {isEditing ? t('edit', language) : t('createNew', language)} {t('vendor', language)}
+                </Text>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
                 {/* Contact Info */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
-                        <User color="#818cf8" size={20} />
+                        <Building2 color="#0891b2" size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Contact Information</Text>
                     </View>
-                    <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Client name" />
+                    <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Vendor/Supplier name" />
                     <Input label="Email" value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
                     <Input label="Phone" value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
                 </View>
@@ -170,38 +150,24 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
                     <Input label="Tax ID / VAT Number" value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
                 </View>
 
-                {/* Discount */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <View style={styles.sectionHeader}>
-                        <Percent color="#f59e0b" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Client Discount</Text>
-                    </View>
-                    <Text style={[styles.hintText, { color: mutedColor }]}>
-                        Set a default discount percentage that will be automatically applied to invoices for this client.
-                    </Text>
-                    <Input
-                        label="Discount (%)"
-                        value={String(formData.discount_percent || 0)}
-                        onChangeText={(text) => setFormData({ ...formData, discount_percent: Number(text) || 0 })}
-                        placeholder="0"
-                        keyboardType="decimal-pad"
-                    />
-                </View>
-
                 {/* Notes */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
+                    <View style={styles.sectionHeader}>
+                        <FileText color="#f59e0b" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Notes</Text>
+                    </View>
                     <Input
                         label="Notes"
                         value={formData.notes}
                         onChangeText={(text) => setFormData({ ...formData, notes: text })}
-                        placeholder="Additional notes about this client..."
+                        placeholder="Additional notes about this vendor..."
                         multiline
                         numberOfLines={3}
                     />
                 </View>
 
                 <Button
-                    title={isEditing ? 'Update Client' : 'Create Client'}
+                    title={isEditing ? t('saveChanges', language) : t('createNew', language)}
                     onPress={handleSave}
                     loading={loading}
                     style={styles.saveButton}
@@ -221,7 +187,6 @@ const styles = StyleSheet.create({
     section: { borderRadius: 16, padding: 16, marginBottom: 12 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600' },
-    hintText: { fontSize: 13, marginBottom: 12, lineHeight: 20 },
     row: { flexDirection: 'row', gap: 12 },
     halfField: { flex: 1 },
     saveButton: { marginTop: 8 },

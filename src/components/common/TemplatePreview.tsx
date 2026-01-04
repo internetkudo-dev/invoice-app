@@ -15,6 +15,7 @@ const templateStyles: Record<TemplateType, { primary: string; secondary: string;
     corporate: { primary: '#1e3a5f', secondary: '#2563eb', accent: '#3b82f6' },
     creative: { primary: '#ec4899', secondary: '#8b5cf6', accent: '#f472b6' },
     receipt: { primary: '#000000', secondary: '#333333', accent: '#666666' },
+    kosovo: { primary: '#1f2937', secondary: '#4b5563', accent: '#9ca3af' },
 };
 
 const templateNames: Record<TemplateType, string> = {
@@ -24,6 +25,7 @@ const templateNames: Record<TemplateType, string> = {
     corporate: 'Corporate',
     creative: 'Creative',
     receipt: 'Receipt',
+    kosovo: 'Kosovo',
 };
 
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {

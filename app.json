@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.internetkudo.invoiceapp"
+      "bundleIdentifier": "com.internetkudo.invoiceapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +35,11 @@
     "plugins": [
       "expo-web-browser",
       "expo-mail-composer"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "455a6f7d-03e1-4834-8312-b6ed47c7908e"
+      }
+    }
   }
 }

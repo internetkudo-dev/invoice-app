@@ -233,10 +233,12 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (selectedFormat === 'Receipt') templateToUse = 'receipt';
 
         setGenerating(true);
-        const success = await printPdf(data, templateToUse);
+        const result = await printPdf(data, templateToUse);
         setGenerating(false);
 
-        if (!success) Alert.alert('Error', 'Failed to show preview');
+        if (!result.success && !result.canceled) {
+            Alert.alert('Error', result.error || 'Failed to show preview');
+        }
     };
 
     const handleUpdateStatus = async (status: string) => {

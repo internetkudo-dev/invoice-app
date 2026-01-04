@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Switch, Platform, Image } from 'react-native';
-import { User, ShieldCheck, Languages, Palette, Moon, Sun, Smartphone, LogOut, ChevronRight, Mail, Phone, MapPin, Building } from 'lucide-react-native';
+import { User, ShieldCheck, Languages, Palette, Moon, Sun, Smartphone, LogOut, ChevronRight, Mail, Phone, MapPin, Building, FileText } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -47,6 +47,7 @@ export function ProfileScreen({ navigation }: any) {
                 biometric_enabled: profile.biometric_enabled,
                 invoice_language: profile.invoice_language,
                 primary_color: profile.primary_color,
+                default_client_discount: profile.default_client_discount,
                 updated_at: new Date().toISOString()
             }).eq('id', user?.id);
 
@@ -166,6 +167,30 @@ export function ProfileScreen({ navigation }: any) {
                                 <Text style={[styles.hint, { color: mutedColor }]}>Requires FaceID/Fingerprint to open the app.</Text>
                             </View>
                             <Switch value={profile.biometric_enabled} onValueChange={handleBiometricToggle} />
+                        </View>
+                    </Card>
+                )}
+
+                {/* Invoice Defaults */}
+                {renderHeader(t('invoiceDefaults', language) || 'Invoice Defaults', FileText, 'invoiceDefaults', '#3b82f6')}
+                {activeSection === 'invoiceDefaults' && (
+                    <Card style={styles.sectionContent}>
+                        <View style={styles.rowBetween}>
+                            <View style={{ flex: 1, marginRight: 16 }}>
+                                <Text style={[styles.label, { color: textColor }]}>Default Client Discount (%)</Text>
+                                <Text style={[styles.hint, { color: mutedColor }]}>Auto-applied to new invoices.</Text>
+                            </View>
+                            <View style={{ width: 80 }}>
+                                <Input
+                                    value={String(profile.default_client_discount || 0)}
+                                    onChangeText={(t) => {
+                                        const val = t ? parseFloat(t) : 0;
+                                        setProfile(prev => ({ ...prev, default_client_discount: val }));
+                                    }}
+                                    keyboardType="numeric"
+                                    placeholder="0"
+                                />
+                            </View>
                         </View>
                     </Card>
                 )}

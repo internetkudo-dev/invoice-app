@@ -46,9 +46,21 @@ export function ExpenseFormScreen({ navigation, route }: any) {
     const [dynamicCategories, setDynamicCategories] = useState<string[]>([]);
 
     useEffect(() => {
-        if (isEditing) fetchExpense();
+        if (isEditing) {
+            fetchExpense();
+        } else if (route.params?.scannedData) {
+            const scan = route.params.scannedData;
+            setFormData(prev => ({
+                ...prev,
+                amount: scan.total_amount ? String(scan.total_amount) : '',
+                date: scan.date || new Date().toISOString().split('T')[0],
+                // If the AI returns a vendor name, we can put it in description for now or match it if we had a vendor field
+                description: scan.vendor_name ? `From ${scan.vendor_name}` : '',
+                type: 'expense'
+            }));
+        }
         fetchCategories();
-    }, [expenseId]);
+    }, [expenseId, route.params?.scannedData]);
 
     const fetchCategories = async () => {
         // Fetch distinct categories from database

@@ -14,9 +14,10 @@ import { useAuth } from '../../hooks/useAuth';
 
 interface SignUpScreenProps {
     onNavigateToSignIn: () => void;
+    navigation?: any; // Added for direct navigation
 }
 
-export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
+export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenProps) {
     const { signUp, verifyEmailOtp } = useAuth();
     const [email, setEmail] = useState('');
     const [firstName, setFirstName] = useState('');
@@ -263,6 +264,13 @@ export function SignUpScreen({ onNavigateToSignIn }: SignUpScreenProps) {
                         <Text style={styles.footerText}>Already have an account?</Text>
                         <TouchableOpacity onPress={onNavigateToSignIn}>
                             <Text style={styles.link}>Sign In</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.footer, { marginTop: 12 }]}>
+                        <Text style={styles.footerText}>Joining a company?</Text>
+                        <TouchableOpacity onPress={() => (navigation as any).navigate('JoinTeam')}>
+                            <Text style={styles.link}>Enter Invite Code</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

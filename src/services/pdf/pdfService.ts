@@ -64,7 +64,7 @@ export async function sharePdf(uri: string): Promise<boolean> {
 export async function printPdf(
     data: InvoiceData,
     template: TemplateType = 'classic'
-): Promise<boolean> {
+): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
     try {
         const html = generateInvoiceHtml(data, template);
 
@@ -72,10 +72,14 @@ export async function printPdf(
             html,
         });
 
-        return true;
-    } catch (error) {
+        return { success: true };
+    } catch (error: any) {
+        // "Printing did not complete" usually means the user closed the print dialog
+        if (error.message?.includes('Printing did not complete') || error.message?.includes('cancelled')) {
+            return { success: false, canceled: true };
+        }
         console.error('Print error:', error);
-        return false;
+        return { success: false, error: error.message };
     }
 }
 

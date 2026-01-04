@@ -105,7 +105,11 @@ export function ContractDetailScreen({ navigation, route }: ContractDetailScreen
         const html = generateHTML();
         try {
             await Print.printAsync({ html });
-        } catch (error) {
+        } catch (error: any) {
+            // Ignore cancellation errors
+            if (error.message?.includes('Printing did not complete') || error.message?.includes('cancelled')) {
+                return;
+            }
             Alert.alert('Error', 'Failed to print contract');
         }
     };

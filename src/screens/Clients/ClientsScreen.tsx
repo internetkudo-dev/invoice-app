@@ -9,7 +9,7 @@ import {
     StyleSheet,
     TextInput,
 } from 'react-native';
-import { Trash2, Search, X, Percent, MapPin, Mail, Phone } from 'lucide-react-native';
+import { Trash2, Search, X, Percent, MapPin, Mail, Phone, FileText } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -136,6 +136,12 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                                     <Text style={styles.discountText}>{item.discount_percent}%</Text>
                                 </View>
                             )}
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('CustomerLedger', { clientId: item.id })}
+                                style={[styles.deleteButton, { marginRight: 8 }]}
+                            >
+                                <FileText color={mutedColor} size={20} />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
                                 <Trash2 color="#ef4444" size={20} />
                             </TouchableOpacity>

@@ -197,22 +197,22 @@ export function SettingsScreen({ navigation }: any) {
         );
     };
 
-    const renderHeader = (title: string, icon: any, section: string, color: string) => (
+    const renderHeader = (title: string, Icon: any, section: string, color: string) => (
         <TouchableOpacity
-            style={[styles.sectionHeader, { backgroundColor: cardBg }]}
+            style={[styles.sectionHeader, { borderLeftColor: color }]}
             onPress={() => setActiveSection(activeSection === section ? null : section)}
         >
-            <View style={[styles.iconContainer, { backgroundColor: `${color}20` }]}>
-                {React.createElement(icon, { color, size: 20 })}
+            <View style={styles.sectionHeaderLeft}>
+                <View style={[styles.sectionIcon, { backgroundColor: color + '15' }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
             </View>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
-            <ChevronRight
-                color={mutedColor}
-                size={20}
-                style={{ transform: [{ rotate: activeSection === section ? '90deg' : '0deg' }] }}
-            />
+            <ChevronRight color={mutedColor} size={20} style={{ transform: [{ rotate: activeSection === section ? '90deg' : '0deg' }] }} />
         </TouchableOpacity>
     );
+
+    const businessLogo = profile.logo_url;
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -227,18 +227,30 @@ export function SettingsScreen({ navigation }: any) {
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                {/* Business Info Overview */}
+                <Card style={styles.businessCard}>
+                    <View style={[styles.businessLogo, { backgroundColor: primaryColor + '20' }]}>
+                        {businessLogo ? (
+                            <Image source={{ uri: businessLogo }} style={styles.logoImage} />
+                        ) : (
+                            <Building color={primaryColor} size={32} />
+                        )}
+                    </View>
+                    <View style={styles.businessDetails}>
+                        <Text style={[styles.businessName, { color: textColor }]}>{profile.company_name || 'My Business'}</Text>
+                        <Text style={[styles.businessId, { color: mutedColor }]}>ID: {profile.active_company_id || profile.company_id || user?.id?.substring(0, 8)}</Text>
+                    </View>
+                </Card>
+
                 {/* Profile Quick Access */}
                 <TouchableOpacity
-                    style={[styles.profileShortcut, { backgroundColor: primaryColor + '10', borderColor: primaryColor + '30' }]}
+                    style={[styles.profileShortcut, { backgroundColor: `${primaryColor}10` }]}
                     onPress={() => navigation.navigate('Profile')}
                 >
-                    <View style={[styles.shortcutIcon, { backgroundColor: primaryColor }]}>
-                        <User color="#fff" size={20} />
+                    <View style={[styles.shortcutIcon, { backgroundColor: `${primaryColor}15` }]}>
+                        <User color={primaryColor} size={20} />
                     </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[styles.shortcutTitle, { color: textColor }]}>Personal Profile & App Preferences</Text>
-                        <Text style={[styles.shortcutSubtitle, { color: mutedColor }]}>Theme, Language, Security & Account</Text>
-                    </View>
+                    <Text style={[styles.shortcutTitleLabel, { color: primaryColor }]}>Go to Profile & Personalization</Text>
                     <ChevronRight color={primaryColor} size={20} />
                 </TouchableOpacity>
 
@@ -522,13 +534,14 @@ const styles = StyleSheet.create({
     title: { fontSize: 28, fontWeight: 'bold' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 60 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, marginBottom: 8 },
-    iconContainer: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: 'transparent', borderLeftWidth: 4, marginBottom: 8 },
+    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
+    sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    sectionTitle: { fontSize: 16, fontWeight: '600' },
     sectionContent: { padding: 16, marginBottom: 16 },
     label: { fontSize: 14, fontWeight: 'bold', marginBottom: 12 },
     subLabel: { fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
-    divider: { height: 1, backgroundColor: '#334155', marginVertical: 16, opacity: 0.1 },
+    divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 16 },
     row: { flexDirection: 'row', alignItems: 'center' },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hint: { fontSize: 13, marginTop: 4 },
@@ -553,8 +566,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    profileShortcut: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, marginBottom: 24, borderWidth: 1 },
-    shortcutIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    shortcutTitle: { fontSize: 16, fontWeight: 'bold' },
-    shortcutSubtitle: { fontSize: 12, marginTop: 2 },
+    businessCard: { flexDirection: 'row', alignItems: 'center', padding: 20, marginBottom: 24 },
+    businessLogo: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    logoImage: { width: '100%', height: '100%' },
+    businessDetails: { marginLeft: 16 },
+    businessName: { fontSize: 20, fontWeight: 'bold' },
+    businessId: { fontSize: 12, marginTop: 4 },
+    profileShortcut: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 24 },
+    shortcutIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    shortcutTitleLabel: { flex: 1, fontWeight: 'bold', fontSize: 14 },
 });

@@ -6,6 +6,7 @@ import {
     corporateTemplate,
     creativeTemplate,
     receiptTemplate,
+    kosovoTemplate,
 } from './templates';
 
 export const templateInfo: Record<TemplateType, { name: string; description: string }> = {
@@ -33,6 +34,10 @@ export const templateInfo: Record<TemplateType, { name: string; description: str
         name: 'Receipt',
         description: '80mm Thermal printer optimized format',
     },
+    kosovo: {
+        name: 'Kosovo',
+        description: 'Kosovo/Albanian commercial invoice with full details',
+    },
 };
 
 export const generateInvoiceHtml = (
@@ -50,6 +55,8 @@ export const generateInvoiceHtml = (
             return creativeTemplate(data);
         case 'receipt':
             return receiptTemplate(data);
+        case 'kosovo':
+            return kosovoTemplate(data);
         case 'classic':
         default:
             return classicTemplate(data);
