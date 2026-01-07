@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, Alert } from 'react-native';
-import { ArrowLeft, Layout, Columns, Type, Eye, Save, RotateCcw } from 'lucide-react-native';
+import { ArrowLeft, Layout, Columns, Type, Eye, Save, RotateCcw, Palette, Check } from 'lucide-react-native';
+
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { Card, Button, Input } from '../../components/common';
 import { supabase } from '../../api/supabase';
-import { TemplateConfig, Profile } from '../../types';
+import { TemplateConfig, Profile, TemplateType } from '../../types';
+import { templateInfo } from '../../services/pdf/TemplateFactory';
+
 
 const defaultLabels = {
     invoice: 'INVOICE',
@@ -27,6 +30,7 @@ const defaultLabels = {
 const defaultConfig: TemplateConfig = {
     showLogo: true,
     showSignature: true,
+    showBuyerSignature: true,
     showStamp: true,
     visibleColumns: {
         sku: false,
@@ -36,6 +40,7 @@ const defaultConfig: TemplateConfig = {
         price: true,
     },
     labels: defaultLabels,
+    style: 'hidroterm',
     pageSize: 'A4'
 };
 
@@ -44,7 +49,8 @@ export function TemplateEditorScreen({ navigation }: any) {
     const { isDark } = useTheme();
     const [config, setConfig] = useState<TemplateConfig>(defaultConfig);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'layout' | 'columns' | 'labels'>('layout');
+    const [activeTab, setActiveTab] = useState<'layout' | 'columns' | 'labels' | 'style'>('layout');
+
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -116,9 +122,11 @@ export function TemplateEditorScreen({ navigation }: any) {
             <View style={styles.tabBar}>
                 {[
                     { id: 'layout', label: 'Layout', icon: Layout },
+                    { id: 'style', label: 'Style', icon: Palette },
                     { id: 'columns', label: 'Columns', icon: Columns },
                     { id: 'labels', label: 'Labels', icon: Type },
                 ].map(tab => (
+
                     <TouchableOpacity
                         key={tab.id}
                         style={[styles.tab, activeTab === tab.id && styles.activeTab]}
@@ -170,7 +178,39 @@ export function TemplateEditorScreen({ navigation }: any) {
                     </Card>
                 )}
 
+                {activeTab === 'style' && (
+                    <Card style={styles.card}>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Invoice Style</Text>
+                        <Text style={[styles.hint, { color: mutedColor }]}>Select the overall look and feel of your invoice.</Text>
+
+                        {(Object.entries(templateInfo) as [TemplateType, { name: string; description: string }][]).map(([key, info]) => (
+                            <TouchableOpacity
+                                key={key}
+                                style={[
+                                    styles.styleOption,
+                                    { backgroundColor: cardBg },
+                                    config.style === key && styles.activeStyle
+                                ]}
+                                onPress={() => setConfig({ ...config, style: key })}
+                            >
+                                <View style={styles.styleContent}>
+                                    <Text style={[styles.styleName, { color: config.style === key ? '#6366f1' : textColor }]}>
+                                        {info.name}
+                                    </Text>
+                                    <Text style={styles.styleDesc}>{info.description}</Text>
+                                </View>
+                                {config.style === key && (
+                                    <View style={{ backgroundColor: '#6366f1', padding: 4, borderRadius: 10 }}>
+                                        <Check color="#fff" size={14} />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </Card>
+                )}
+
                 {activeTab === 'columns' && (
+
                     <Card style={styles.card}>
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Table Columns</Text>
                         <Text style={[styles.hint, { color: mutedColor }]}>Choose which columns appear in the items table.</Text>
@@ -251,5 +291,11 @@ const styles = StyleSheet.create({
     activePageSize: { borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.05)' },
     paperIcon: { borderWidth: 1.5, borderColor: '#6366f1', borderRadius: 2, marginBottom: 8 },
     pageSizeText: { fontSize: 14, fontWeight: '700' },
-    checkDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366f1' }
+    checkDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#6366f1' },
+    styleOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', marginBottom: 8 },
+    activeStyle: { borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.05)' },
+    styleContent: { flex: 1 },
+    styleName: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    styleDesc: { fontSize: 12, color: '#64748b' },
 });
+

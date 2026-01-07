@@ -14,7 +14,7 @@ export interface PdfResult {
  */
 export async function generatePdf(
     data: InvoiceData,
-    template: TemplateType = 'classic'
+    template: TemplateType = 'hidroterm'
 ): Promise<PdfResult> {
     try {
         const html = generateInvoiceHtml(data, template);
@@ -63,7 +63,7 @@ export async function sharePdf(uri: string): Promise<boolean> {
  */
 export async function printPdf(
     data: InvoiceData,
-    template: TemplateType = 'classic'
+    template: TemplateType = 'hidroterm'
 ): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
     try {
         const html = generateInvoiceHtml(data, template);

@@ -40,6 +40,9 @@ export function SettingsScreen({ navigation }: any) {
         email: user?.email || '',
         phone: '',
         address: '',
+        city: '',
+        country: '',
+        website: '',
         currency: 'USD',
         tax_rate: 0,
         tax_name: 'VAT',
@@ -93,7 +96,8 @@ export function SettingsScreen({ navigation }: any) {
                 // Exclude fields that belong only to profile or are IDs
                 const {
                     id, active_company_id, biometric_enabled, role,
-                    invoice_language, primary_color, updated_at,
+                    invoice_language, primary_color, updated_at, company_id,
+                    default_client_discount,
                     ...companyFields
                 } = profile;
 
@@ -309,6 +313,15 @@ export function SettingsScreen({ navigation }: any) {
                         <Input label="Email" value={profile.email} onChangeText={(t) => setProfile({ ...profile, email: t })} keyboardType="email-address" />
                         <Input label="Phone" value={profile.phone} onChangeText={(t) => setProfile({ ...profile, phone: t })} keyboardType="phone-pad" />
                         <Input label="Address" value={profile.address} onChangeText={(t) => setProfile({ ...profile, address: t })} multiline />
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <View style={{ flex: 1 }}>
+                                <Input label="City" value={profile.city} onChangeText={(t) => setProfile({ ...profile, city: t })} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Input label="Country" value={profile.country} onChangeText={(t) => setProfile({ ...profile, country: t })} />
+                            </View>
+                        </View>
+                        <Input label="Website" value={profile.website} onChangeText={(t) => setProfile({ ...profile, website: t })} placeholder="www.example.com" />
                     </Card>
                 )}
 
@@ -394,7 +407,7 @@ export function SettingsScreen({ navigation }: any) {
 
                         <View style={styles.divider} />
                         <Button
-                            title="Edit PDF Template Layout"
+                            title="Invoice Design & Style"
                             variant="primary"
                             icon={Layout}
                             onPress={() => navigation.navigate('TemplateEditor')}
@@ -408,7 +421,7 @@ export function SettingsScreen({ navigation }: any) {
                             style={{ marginTop: 8 }}
                         />
                         <Button
-                            title="Invoice Template Settings"
+                            title="Invoice Fields & Defaults"
                             variant="outline"
                             icon={FileText}
                             onPress={() => navigation.navigate('InvoiceTemplateSettings')}

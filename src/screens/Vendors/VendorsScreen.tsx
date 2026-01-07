@@ -14,7 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, FAB } from '../../components/common';
+import { Card, FAB, ScreenHeader } from '../../components/common';
+
 import { Vendor } from '../../types';
 import { t } from '../../i18n';
 import { formatCurrency } from '../../utils/format';
@@ -226,8 +227,11 @@ export function VendorsScreen({ navigation, showHeader = false }: VendorsScreenP
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
+            <ScreenHeader
+                title={t('vendors', language)}
+                subtitle="Menaxhimi"
+            />
             <ScrollView
-                stickyHeaderIndices={[1]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
             >
@@ -258,7 +262,7 @@ export function VendorsScreen({ navigation, showHeader = false }: VendorsScreenP
                 </View>
 
                 {/* Filters & Search Header */}
-                <View style={{ backgroundColor: bgColor, paddingHorizontal: 16 }}>
+                <View style={{ backgroundColor: bgColor }}>
                     <View style={[styles.searchBar, { backgroundColor: cardBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
@@ -337,9 +341,9 @@ export function VendorsScreen({ navigation, showHeader = false }: VendorsScreenP
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { paddingBottom: 100 },
+    scrollContent: { paddingBottom: 100, paddingHorizontal: 20 },
     statsContainer: { paddingVertical: 10 },
-    statsScroll: { paddingHorizontal: 16, gap: 12 },
+    statsScroll: { gap: 12 },
     statCard: { width: 140, padding: 16, alignItems: 'center', gap: 6 },
     statValue: { fontSize: 18, fontWeight: 'bold' },
     statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
@@ -353,7 +357,7 @@ const styles = StyleSheet.create({
     sortButtons: { flexDirection: 'row', gap: 16 },
     sortBtn: { paddingVertical: 4 },
     sortBtnText: { fontSize: 10, fontWeight: 'bold' },
-    vendorList: { paddingHorizontal: 16 },
+    vendorList: { paddingHorizontal: 20 },
     vendorCard: { marginBottom: 12, padding: 16 },
     vendorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     vendorInfo: { flex: 1 },

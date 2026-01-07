@@ -9,23 +9,11 @@ interface TemplatePreviewProps {
 }
 
 const templateStyles: Record<TemplateType, { primary: string; secondary: string; accent: string }> = {
-    classic: { primary: '#1f2937', secondary: '#374151', accent: '#6b7280' },
-    modern: { primary: '#6366f1', secondary: '#8b5cf6', accent: '#a78bfa' },
-    minimalist: { primary: '#0f172a', secondary: '#64748b', accent: '#cbd5e1' },
-    corporate: { primary: '#1e3a5f', secondary: '#2563eb', accent: '#3b82f6' },
-    creative: { primary: '#ec4899', secondary: '#8b5cf6', accent: '#f472b6' },
-    receipt: { primary: '#000000', secondary: '#333333', accent: '#666666' },
-    kosovo: { primary: '#1f2937', secondary: '#4b5563', accent: '#9ca3af' },
+    hidroterm: { primary: '#000000', secondary: '#333333', accent: '#666666' },
 };
 
 const templateNames: Record<TemplateType, string> = {
-    classic: 'Classic',
-    modern: 'Modern',
-    minimalist: 'Minimalist',
-    corporate: 'Corporate',
-    creative: 'Creative',
-    receipt: 'Receipt',
-    kosovo: 'Kosovo',
+    hidroterm: 'HidroTherm',
 };
 
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {

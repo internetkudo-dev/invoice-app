@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import * as MailComposer from 'expo-mail-composer';
 import {
     View,
@@ -47,14 +48,31 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const cardBg = isDark ? '#1e293b' : '#ffffff';
     const primaryColor = profile?.primary_color || '#818cf8';
 
-    useEffect(() => {
-        fetchData();
-    }, [invoiceId]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchData();
+        }, [invoiceId])
+    );
 
     const fetchData = async () => {
         if (!user || !invoiceId) return;
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+
+        // Fix: Fetch company details if active_company_id is set
+        if (profileData?.active_company_id) {
+            const { data: companyData } = await supabase
+                .from('companies')
+                .select('*')
+                .eq('id', profileData.active_company_id)
+                .single();
+
+            if (companyData) {
+                // Merge company data over profile data (company settings take precedence)
+                profileData = { ...profileData, ...companyData };
+            }
+        }
+
         if (profileData) setProfile(profileData);
 
         const { data: invoiceData } = await supabase
@@ -86,6 +104,8 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             company: {
                 name: profile.company_name || 'Your Company',
                 address: profile.address || '',
+                city: profile.city,
+                country: profile.country,
                 email: profile.email,
                 phone: profile.phone,
                 website: profile.website,
@@ -106,6 +126,8 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 name: client?.name || 'Client',
                 address: [client?.address, client?.city, client?.zip_code, client?.country].filter(Boolean).join(', ') || '',
                 email: client?.email || '',
+                phone: client?.phone || '',
+                taxId: client?.tax_id || '',
             },
             details: {
                 number: invoice.invoice_number,
@@ -124,8 +146,11 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 description: item.description,
                 quantity: Number(item.quantity),
                 unit: item.unit,
+                sku: (item as any).product?.sku || (item as any).sku,
                 price: Number(item.unit_price),
+                discount: (item as any).discount || 0,
                 total: Number(item.amount),
+                taxRate: Number(item.tax_rate) || 0,
             })),
             summary: {
                 subtotal: items.reduce((sum, item) => sum + Number(item.amount), 0),
@@ -147,8 +172,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         setGenerating(true);
         // Map format to template
-        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
-        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+        let templateToUse: TemplateType = 'hidroterm';
 
         const result = await generatePdf(data, templateToUse);
         setGenerating(false);
@@ -180,8 +204,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             if (!data) return;
 
             // 1. Generate PDF
-            let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
-            if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+            let templateToUse: TemplateType = 'hidroterm';
 
             const pdfResult = await generatePdf(data, templateToUse);
             if (!pdfResult.success || !pdfResult.uri) throw new Error('Failed to generate PDF');
@@ -210,8 +233,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
-        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
-        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+        let templateToUse: TemplateType = 'hidroterm';
 
         setGenerating(true);
         const result = await generatePdf(data, templateToUse);
@@ -229,8 +251,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
-        let templateToUse: TemplateType = (profile?.template_config as any)?.style || 'modern';
-        if (selectedFormat === 'Receipt') templateToUse = 'receipt';
+        let templateToUse: TemplateType = 'hidroterm';
 
         setGenerating(true);
         const result = await printPdf(data, templateToUse);

@@ -4,6 +4,8 @@ export interface Profile {
     email?: string;
     phone?: string;
     address?: string;
+    city?: string;
+    country?: string;
     website?: string;
     logo_url?: string;
     signature_url?: string;
@@ -52,7 +54,9 @@ export interface TemplateConfig {
     };
     labels: Record<string, string>;
     pageSize: 'A4' | 'A5' | 'Receipt';
+    style?: TemplateType;
 }
+
 
 export interface Client {
     id: string;
@@ -266,6 +270,8 @@ export interface InvoiceData {
     company: {
         name: string;
         address: string;
+        city?: string;
+        country?: string;
         email?: string;
         phone?: string;
         website?: string;
@@ -339,7 +345,8 @@ export interface InvoiceData {
     config?: TemplateConfig;
 }
 
-export type TemplateType = 'classic' | 'modern' | 'minimalist' | 'corporate' | 'creative' | 'receipt' | 'kosovo';
+export type TemplateType = 'hidroterm';
+
 
 export interface Company {
     id: string;
@@ -347,6 +354,8 @@ export interface Company {
     email?: string;
     phone?: string;
     address?: string;
+    city?: string;
+    country?: string;
     website?: string;
     logo_url?: string;
     signature_url?: string;

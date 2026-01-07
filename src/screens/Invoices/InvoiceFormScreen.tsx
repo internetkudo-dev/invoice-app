@@ -314,9 +314,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         setLineItems(items => items.map(item => {
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
-                if (field === 'quantity' || field === 'unit_price') {
-                    // Fix #3: Ensure decimal precision with proper rounding
-                    updated.amount = Math.round(updated.quantity * updated.unit_price * 100) / 100;
+
+                // Recalculate amount if quantity, price, or tax changes
+                if (field === 'quantity' || field === 'unit_price' || field === 'tax_rate') {
+                    const qty = field === 'quantity' ? value : item.quantity;
+                    const price = field === 'unit_price' ? value : item.unit_price;
+                    const tax = field === 'tax_rate' ? value : (item.tax_rate || 18);
+
+                    // Amount = Qty * Price * (1 + Tax/100)
+                    updated.amount = Math.round(qty * price * (1 + tax / 100) * 100) / 100;
+                    updated.tax_rate = tax;
                 }
                 return updated;
             }
@@ -327,7 +334,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const addLineItem = () => {
         setLineItems(items => [
             ...items,
-            { id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 },
+            { id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0, tax_rate: 18 },
         ]);
     };
 
@@ -337,14 +344,14 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const selectProduct = (item: LineItem, product: Product) => {
-        // Fix #1: Dismiss keyboard to ensure UI updates properly
         Keyboard.dismiss();
 
         setLineItems(items => items.map(i => {
             if (i.id === item.id) {
-                // Fix #3: Ensure decimal precision with proper rounding
                 const unitPrice = Math.round(Number(product.unit_price) * 100) / 100;
-                const amount = Math.round(i.quantity * unitPrice * 100) / 100;
+                const taxRate = product.tax_rate || 18;
+                const amount = Math.round(i.quantity * unitPrice * (1 + taxRate / 100) * 100) / 100;
+
                 return {
                     ...i,
                     description: product.name,
@@ -352,7 +359,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     unit: product.unit || 'pcs',
                     amount: amount,
                     product_id: product.id,
-                    tax_rate: product.tax_rate,
+                    tax_rate: taxRate,
                 };
             }
             return i;
@@ -443,13 +450,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 recurring_interval: formData.is_recurring ? formData.recurring_interval : null,
                 type: formData.type,
                 subtype: formData.subtype,
-                buyer_signature_url: formData.buyer_signature_url,
+                buyer_signature_url: formData.buyer_signature_url || null,
                 payment_method: formData.payment_method,
                 amount_received: formData.amount_received,
                 change_amount: calculateChange(),
                 paper_size: formData.paper_size,
                 // Force kosovo template for fiscal invoices
-                template_id: forceTemplate || 'classic',
+                template_id: forceTemplate || 'hidroterm',
             };
 
             console.log('Saving invoice:', invoiceData);
@@ -481,7 +488,10 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
             if (itemsToInsert.length > 0) {
                 const { error: itemsError } = await supabase.from('invoice_items').insert(itemsToInsert);
-                if (itemsError) console.error('Error saving items:', itemsError);
+                if (itemsError) {
+                    console.error('Error saving items:', itemsError);
+                    throw new Error(`Failed to save items: ${itemsError.message}`);
+                }
             }
 
             console.log('Invoice saved successfully:', savedId);
@@ -727,8 +737,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                            <View style={{ flex: 1.5 }}>
-                                <Input label={t('price', language)} value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
+                            <View style={{ flex: 1.5, flexDirection: 'row', gap: 8 }}>
+                                <View style={{ flex: 1 }}>
+                                    <Input label={t('price', language)} value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
+                                </View>
+                                <View style={{ width: 60 }}>
+                                    <Input label="Tvsh %" value={String(item.tax_rate || 18)} onChangeText={t => updateLineItem(item.id, 'tax_rate', Number(t) || 0)} keyboardType="numeric" />
+                                </View>
                             </View>
                         </View>
 

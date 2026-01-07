@@ -8,7 +8,7 @@ import {
     Switch,
     Alert,
 } from 'react-native';
-import { ArrowLeft, Save, FileText, Type, Hash, Calendar, Percent, User, Package, Plus, Trash2, GripVertical } from 'lucide-react-native';
+import { ArrowLeft, Save, FileText, Type, Hash, Calendar, Percent, User, Package, Plus, Trash2, GripVertical, Layout } from 'lucide-react-native';
 import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
 import { supabase } from '../../../api/supabase';
@@ -254,6 +254,13 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                         }}
                         placeholder="Thank you for your business!"
                         multiline
+                    />
+                    <Button
+                        title="Change Design Style"
+                        variant="outline"
+                        icon={Layout}
+                        onPress={() => navigation.navigate('TemplateEditor')}
+                        style={{ marginTop: 16 }}
                     />
                 </Card>
 

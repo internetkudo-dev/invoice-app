@@ -14,7 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, FAB } from '../../components/common';
+import { Card, FAB, ScreenHeader } from '../../components/common';
+
 import { Client } from '../../types';
 import { t } from '../../i18n';
 import { formatCurrency } from '../../utils/format';
@@ -216,8 +217,11 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
+            <ScreenHeader
+                title={t('clients', language)}
+                subtitle="Menaxhimi"
+            />
             <ScrollView
-                stickyHeaderIndices={[1]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
             >
@@ -248,7 +252,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                 </View>
 
                 {/* Filters & Search Header */}
-                <View style={{ backgroundColor: bgColor, paddingHorizontal: 16 }}>
+                <View style={{ backgroundColor: bgColor }}>
                     <View style={[styles.searchBar, { backgroundColor: cardBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
@@ -327,9 +331,9 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    scrollContent: { paddingBottom: 100 },
+    scrollContent: { paddingBottom: 100, paddingHorizontal: 20 },
     statsContainer: { paddingVertical: 16 },
-    statsScroll: { paddingHorizontal: 16, gap: 12 },
+    statsScroll: { gap: 12 },
     statCard: { width: 140, padding: 16, alignItems: 'center', gap: 6 },
     statValue: { fontSize: 18, fontWeight: 'bold' },
     statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
@@ -343,7 +347,7 @@ const styles = StyleSheet.create({
     sortButtons: { flexDirection: 'row', gap: 16 },
     sortBtn: { paddingVertical: 4 },
     sortBtnText: { fontSize: 10, fontWeight: 'bold' },
-    clientList: { paddingHorizontal: 16 },
+    clientList: { paddingHorizontal: 20 },
     clientCard: { marginBottom: 12, padding: 16 },
     clientHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     clientInfo: { flex: 1 },

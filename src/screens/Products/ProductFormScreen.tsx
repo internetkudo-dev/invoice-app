@@ -193,7 +193,7 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
 
                     <View style={styles.row}>
                         <View style={{ flex: 2 }}>
-                            <Text style={[styles.fieldLabel, { color: textColor }]}>Price</Text>
+                            <Text style={[styles.fieldLabel, { color: textColor }]}>Price (Net)</Text>
                             <View style={styles.priceGrid}>
                                 <Input
                                     value={majorPrice}
@@ -223,7 +223,18 @@ export function ProductFormScreen({ navigation, route }: ProductFormScreenProps)
                                 />
                             </View>
                         </View>
+
+                        {/* Display Gross Price */}
+                        <View style={{ flex: 2 }}>
+                            <Text style={[styles.fieldLabel, { color: textColor }]}>Final Price (Inc. tax)</Text>
+                            <View style={[styles.priceGrid, { backgroundColor: inputBg, borderRadius: 12, paddingHorizontal: 12, height: 50 }]}>
+                                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#10b981' }}>
+                                    {((formData.unit_price || 0) * (1 + (formData.tax_rate || 0) / 100)).toFixed(2)}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
+
                     <View style={{ marginTop: 16 }}>
                         <Text style={[styles.fieldLabel, { color: textColor }]}>Unit</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>

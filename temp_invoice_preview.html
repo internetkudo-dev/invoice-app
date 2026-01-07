@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      color: #000;
+      background: #ccc; /* Gray background to see the page bounds */
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .page {
+        width: 210mm;
+        height: 297mm;
+        background: #fff;
+        padding: 10mm;
+        box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    
+    /* Header */
+    .header { text-align: center; margin-bottom: 20px; text-transform: uppercase; }
+    .brand-name { font-size: 24px; font-weight: 900; letter-spacing: 1px; }
+    .brand-sub { font-size: 12px; font-weight: normal; margin-top: 4px; }
+    
+    /* Info Columns */
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #000; padding-bottom: 10px; }
+    .info-col { width: 48%; }
+    .info-title { font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+    .info-row { display: flex; margin-bottom: 2px; }
+    .label { width: 80px; font-weight: bold; font-size: 9px; }
+    .value { flex: 1; font-size: 9px; }
+
+    /* Middle Section (Barcode & Summary) */
+    .middle-section { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .barcode-area { text-align: center; flex: 1; }
+    .invoice-label { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+    .invoice-number { font-size: 12px; font-weight: bold; margin-top: 2px; }
+    
+    .summary-box { 
+        border: 2px solid #000; 
+        padding: 10px; 
+        width: 250px; 
+        text-align: right; 
+    }
+    .summary-title { font-weight: bold; font-size: 12px; }
+    .summary-value { font-size: 24px; font-weight: 900; margin: 5px 0; }
+    .amount-words { font-size: 9px; font-style: italic; }
+
+    /* Meta Grid */
+    .meta-grid { display: flex; gap: 10px; margin-bottom: 10px; font-size: 9px; }
+    .meta-item { border: 1px solid #ccc; padding: 4px; flex: 1; }
+    .meta-label { font-weight: bold; display: block; margin-bottom: 2px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9px; }
+    th { background: #333; color: #fff; padding: 6px 4px; text-align: center; font-weight: bold; border: 1px solid #000; }
+    td { border: 1px solid #000; padding: 4px; }
+
+    /* Footer Totals */
+    .totals-section { display: flex; justify-content: flex-end; margin-bottom: 30px; }
+    .totals-table { width: 250px; text-align: right; font-size: 10px; }
+    .total-row { display: flex; justify-content: space-between; padding: 2px 0; }
+    .total-final { 
+        font-weight: 900; 
+        font-size: 14px; 
+        border-top: 2px solid #000; 
+        border-bottom: 2px solid #000; 
+        padding: 5px 0; 
+        margin-top: 5px; 
+    }
+
+    /* Signatures */
+    .signatures { display: flex; justify-content: space-between; margin-bottom: 40px; text-align: center; font-size: 10px; }
+    .sig-block { width: 22%; }
+    .sig-line { border-bottom: 1px solid #000; height: 30px; margin-bottom: 5px; }
+
+    /* Bottom Footer */
+    .page-footer { 
+        display: flex; 
+        justify-content: space-between; 
+        border-top: 1px solid #000; 
+        padding-top: 10px; 
+        font-size: 8px; 
+    }
+    .footer-col { width: 32%; }
+    .footer-col p { margin-bottom: 2px; }
+    .qr-container { float: left; margin-right: 10px; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <!-- 1. Header -->
+  <div class="header">
+    <div class="brand-name">N.T. HIDROTERM</div>
+    <div class="brand-sub">EXPORT-IMPORT</div>
+  </div>
+
+  <!-- 2. Address Columns -->
+  <div class="info-section">
+    <div class="info-col">
+      <div class="info-title">Fatura Për:</div>
+      <div class="value" style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">KES GROUP L.L.C.</div>
+      <div class="info-row"><span class="label">Nr. unik/fiskal:</span><span class="value">811234567</span></div>
+      <div class="info-row"><span class="label">Kontakti:</span><span class="value">info@kesgroup.com</span></div>
+      <div class="info-row"><span class="label">Adresa:</span><span class="value">Rr. Deshmoret e Kombit, Prishtine</span></div>
+    </div>
+    
+    <div class="info-col">
+      <div class="info-title">Malli Për (Delivery):</div>
+      <div class="value" style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">KES GROUP L.L.C.</div>
+      <div class="info-row"><span class="label">Adresa:</span><span class="value">Rr. Deshmoret e Kombit, Prishtine</span></div>
+      <div class="info-row"><span class="label">Tel:</span><span class="value">+383 44 123 456</span></div>
+    </div>
+  </div>
+
+  <!-- 3. Middle Section -->
+  <div class="middle-section">
+    <div class="barcode-area">
+      <div class="invoice-label">FATURA</div>
+      <!-- Mock Barcode -->
+      <div style="height: 30px; width: 200px; background: repeating-linear-gradient(90deg, #000 0px, #000 2px, #fff 2px, #fff 4px); margin: 0 auto;"></div>
+      <div class="invoice-number">371-210-001-24</div>
+    </div>
+
+    <div class="summary-box">
+      <div class="summary-title">Vlera e mbetur:</div>
+      <div class="summary-value">110,59 €</div>
+      <div class="amount-words">Njeqind e dhjete. Pesedhjete e nente</div>
+    </div>
+  </div>
+
+  <!-- 4. Meta Grid -->
+  <div class="meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">Njësia Org.:</span>
+      DEPO KRYESORE
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Data e faturës:</span>
+      06.12.2024
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Afati për pagesë:</span>
+      16.12.2024
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Kushtet:</span>
+      NET 10
+    </div>
+  </div>
+
+  <!-- 5. Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>Nr</th>
+        <th>Shifra</th>
+        <th style="text-align: left;">Përshkrimi</th>
+        <th>Sasia</th>
+        <th>Njësia</th>
+        <th>Çmimi pa Tvsh</th>
+        <th>Rabati</th>
+        <th>Tvsh %</th>
+        <th>Vlera shitëse</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="text-align: center;">1</td>
+            <td>TS-001</td>
+            <td>TERMOSTAT DHOME ME WIFI (SMART)</td>
+            <td style="text-align: right;">1</td>
+            <td style="text-align: center;">copë</td>
+            <td style="text-align: right;">93,72 €</td>
+            <td style="text-align: right;">0%</td> 
+            <td style="text-align: right;">18%</td>
+            <td style="text-align: right;">93,72 €</td>
+            <!-- <td style="text-align: right;">110,59 €</td> -->
+            <td style="text-align: right;">110,59 €</td>
+        </tr>
+    </tbody>
+  </table>
+
+  <!-- 6. Totals -->
+  <div class="totals-section">
+    <div class="totals-table">
+      <div class="total-row">
+        <span>Vlera pa rabat:</span>
+        <span>93,72 €</span>
+      </div>
+      <div class="total-row">
+        <span>Rabati:</span>
+        <span>0.00</span>
+      </div>
+      <div class="total-row">
+        <span>Vlera pa tvsh:</span>
+        <span>93,72 €</span>
+      </div>
+      <div class="total-row">
+        <span>Tvsh Total:</span>
+        <span>16,87 €</span>
+      </div>
+      <div class="total-row total-final">
+        <span>Vlera për pagesë:</span>
+        <span>110,59 €</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Signatures -->
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-title">Faturoi:</div>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-title">Dërgoi:</div>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-title">Kontrolloi:</div>
+      <div class="sig-line"></div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-title">Pranoi:</div>
+      <div class="sig-line"></div>
+      <div>Emri i plotë</div>
+    </div>
+  </div>
+
+  <!-- 8. Page Footer -->
+  <div class="page-footer">
+    <div class="footer-col">
+      <div class="qr-container">
+        <!-- Mock QR -->
+        <div style="width: 50px; height: 50px; background: #000;"></div>
+      </div>
+      <p><strong>Nr. ID:</strong> 123456789</p>
+      <p><strong>Bank:</strong> NLB Banka</p>
+      <p><strong>IBAN:</strong> XK05 1234 5678 9012 3456</p>
+    </div>
+    <div class="footer-col" style="text-align: center;">
+      <p>Rr. Industriale, pn</p>
+      <p>Prishtinë, Kosovo</p>
+      <p>+383 49 111 222</p>
+    </div>
+    <div class="footer-col" style="text-align: right;">
+      <p>info@hidroterm.com</p>
+      <p>www.hidroterm.com</p>
+      <p style="margin-top: 5px; color: #666;">© Invoice App 2024</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
