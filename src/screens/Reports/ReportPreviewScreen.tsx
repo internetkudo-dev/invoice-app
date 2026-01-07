@@ -49,11 +49,49 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                     ]
                 });
             } else {
+                // Fix #6: Sales Book - fetch monthly invoice data
+                const startOfMonth = new Date();
+                startOfMonth.setDate(1);
+                startOfMonth.setHours(0, 0, 0, 0);
+                const start = startOfMonth.toISOString().split('T')[0];
+
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('company_id, active_company_id')
+                    .eq('id', user?.id)
+                    .single();
+
+                const companyId = profile?.active_company_id || profile?.company_id || user?.id;
+
+                const { data: invoices } = await supabase
+                    .from('invoices')
+                    .select('*, client:clients(name)')
+                    .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
+                    .gte('issue_date', start)
+                    .eq('type', 'invoice')
+                    .order('issue_date', { ascending: false });
+
+                const totalSales = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
+                const paidTotal = invoices?.filter(i => i.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
+                const taxTotal = invoices?.reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0) || 0;
+
+                const monthName = startOfMonth.toLocaleDateString('sq-AL', { month: 'long', year: 'numeric' });
+
                 setData({
                     title: 'Sales Book (Libri i Shitjes)',
-                    date: 'Monthly View',
-                    metrics: [],
-                    transactions: []
+                    date: monthName,
+                    metrics: [
+                        { label: 'Total Sales', value: formatCurrency(totalSales), icon: TrendingUp, color: '#6366f1' },
+                        { label: 'Paid', value: formatCurrency(paidTotal), icon: TrendingUp, color: '#10b981' },
+                        { label: 'Tax (TVSH)', value: formatCurrency(taxTotal), icon: FileText, color: '#f59e0b' },
+                    ],
+                    transactions: invoices?.map(inv => ({
+                        id: inv.id,
+                        desc: `${inv.invoice_number} - ${(inv.client as any)?.name || 'Guest'}`,
+                        amount: inv.total_amount,
+                        type: 'sale',
+                        status: inv.status,
+                    })) || [],
                 });
             }
         } catch (error) {

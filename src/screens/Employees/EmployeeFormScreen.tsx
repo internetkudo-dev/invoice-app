@@ -4,7 +4,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { Button, Card, LoadingOverlay } from '../../components/common';
 import { supabase } from '../../api/supabase';
 import { t } from '../../i18n';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, FileLock } from 'lucide-react-native';
 
 export function EmployeeFormScreen({ navigation, route }: any) {
     const { isDark, primaryColor, language } = useTheme();
@@ -133,8 +133,10 @@ export function EmployeeFormScreen({ navigation, route }: any) {
             if (!user) throw new Error('Not authenticated');
 
             // Find current user's profile to get company_id
-            const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
-            const companyId = profile?.company_id || user.id; // Fallback to user ID if self-employed
+            const { data: profile } = await supabase.from('profiles').select('active_company_id').eq('id', user.id).single();
+            const companyId = profile?.active_company_id;
+
+            if (!companyId) throw new Error("No active company selected. Please create or select a company in settings.");
 
             const payload = {
                 first_name: firstName,
@@ -293,6 +295,16 @@ export function EmployeeFormScreen({ navigation, route }: any) {
                     onPress={handleSave}
                     style={{ marginTop: 20 }}
                 />
+
+                {isEditing && (
+                    <Button
+                        title="View Official Documents (Vault)"
+                        variant="outline"
+                        onPress={() => navigation.navigate('EmployeeVault', { id: isEditing })}
+                        style={{ marginTop: 12 }}
+                        icon={FileLock}
+                    />
+                )}
             </ScrollView>
         </View>
     );

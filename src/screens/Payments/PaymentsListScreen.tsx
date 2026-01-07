@@ -6,9 +6,12 @@ import {
     TouchableOpacity,
     RefreshControl,
     StyleSheet,
+    Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft, Plus, DollarSign, User, FileText, Banknote, Building, CreditCard } from 'lucide-react-native';
+import { ArrowLeft, Plus, DollarSign, User, FileText, Banknote, Building, CreditCard, Share2, Printer } from 'lucide-react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -22,6 +25,103 @@ export function PaymentsListScreen({ navigation }: any) {
     const [payments, setPayments] = useState<Payment[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [totalReceived, setTotalReceived] = useState(0);
+    const [exporting, setExporting] = useState(false);
+
+    // Fix #5b: Generate HTML for PDF export
+    const generatePaymentsHtml = (): string => {
+        const rows = payments.map(p => `
+            <tr>
+                <td>${p.payment_number}</td>
+                <td>${p.client?.name || 'Pa klient'}</td>
+                <td>${new Date(p.payment_date).toLocaleDateString('sq-AL')}</td>
+                <td>${p.payment_method}</td>
+                <td style="text-align: right; color: #10b981;">€${Number(p.amount).toFixed(2)}</td>
+            </tr>
+        `).join('');
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #1e293b; font-size: 24px; margin-bottom: 5px; }
+                    .date { color: #64748b; margin-bottom: 20px; }
+                    .summary { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                    .summary strong { color: #10b981; font-size: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+                    th { background: #f8fafc; font-weight: bold; color: #64748b; font-size: 12px; }
+                    td { font-size: 13px; }
+                </style>
+            </head>
+            <body>
+                <h1>Pagesat Hyrëse</h1>
+                <p class="date">${new Date().toLocaleDateString('sq-AL', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                <div class="summary">Total i Pranuar: <strong>€${totalReceived.toFixed(2)}</strong></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nr. Pagese</th>
+                            <th>Klienti</th>
+                            <th>Data</th>
+                            <th>Metoda</th>
+                            <th style="text-align: right;">Shuma</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </body>
+            </html>
+        `;
+    };
+
+    const handlePrintPdf = async () => {
+        if (payments.length === 0) {
+            Alert.alert('Info', 'Nuk ka pagesa për të eksportuar');
+            return;
+        }
+        setExporting(true);
+        try {
+            const html = generatePaymentsHtml();
+            await Print.printAsync({ html });
+        } catch (error: any) {
+            if (!error.message?.includes('cancelled')) {
+                Alert.alert('Error', 'Dështoi printimi: ' + error.message);
+            }
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleSharePdf = async () => {
+        if (payments.length === 0) {
+            Alert.alert('Info', 'Nuk ka pagesa për të eksportuar');
+            return;
+        }
+        setExporting(true);
+        try {
+            const html = generatePaymentsHtml();
+            const { uri } = await Print.printToFileAsync({ html, base64: false });
+
+            const isAvailable = await Sharing.isAvailableAsync();
+            if (!isAvailable) {
+                Alert.alert('Error', 'Sharing nuk është i disponueshëm');
+                return;
+            }
+
+            await Sharing.shareAsync(uri, {
+                mimeType: 'application/pdf',
+                dialogTitle: 'Share Pagesat Hyrëse',
+                UTI: 'com.adobe.pdf',
+            });
+        } catch (error: any) {
+            Alert.alert('Error', 'Dështoi eksportimi: ' + error.message);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -159,11 +259,28 @@ export function PaymentsListScreen({ navigation }: any) {
                     <View style={[styles.summaryIcon, { backgroundColor: '#10b98115' }]}>
                         <DollarSign color="#10b981" size={24} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                         <Text style={[styles.summaryLabel, { color: mutedColor }]}>Total i Pranuar</Text>
                         <Text style={[styles.summaryValue, { color: '#10b981' }]}>
                             €{totalReceived.toFixed(2)}
                         </Text>
+                    </View>
+                    {/* Fix #5b: PDF Export Actions */}
+                    <View style={styles.exportActions}>
+                        <TouchableOpacity
+                            style={[styles.exportButton, { backgroundColor: `${primaryColor}15` }]}
+                            onPress={handlePrintPdf}
+                            disabled={exporting}
+                        >
+                            <Printer color={primaryColor} size={18} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.exportButton, { backgroundColor: '#10b98115' }]}
+                            onPress={handleSharePdf}
+                            disabled={exporting}
+                        >
+                            <Share2 color="#10b981" size={18} />
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Card>
@@ -259,4 +376,15 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     emptyText: { fontSize: 15 },
+    exportActions: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    exportButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

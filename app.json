@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "invoice-app",
+    "name": "Faturicka",
     "slug": "invoice-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -34,7 +34,8 @@
     "scheme": "invoiceapp",
     "plugins": [
       "expo-web-browser",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

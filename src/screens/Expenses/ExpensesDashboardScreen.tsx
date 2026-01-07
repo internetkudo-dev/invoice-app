@@ -148,12 +148,8 @@ export function ExpensesDashboardScreen({ navigation }: any) {
                 navigation.navigate('ExpensesList', { type });
                 break;
             case 'add':
-                if (type === 'expense') {
-                    navigation.navigate('ExpenseForm');
-                } else {
-                    // For income, navigate to invoice form
-                    navigation.getParent()?.navigate('InvoicesTab', { screen: 'InvoiceForm' });
-                }
+                // Both expense and income use ExpenseForm, just with different type param
+                navigation.navigate('ExpenseForm', { type: type === 'income' ? 'income' : 'expense' });
                 break;
         }
     };

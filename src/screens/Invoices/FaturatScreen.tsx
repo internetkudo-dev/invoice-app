@@ -37,6 +37,8 @@ import {
     History,
     Sparkles,
     ScanLine,
+    User,
+    Briefcase
 } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -584,44 +586,7 @@ export function FaturatScreen({ navigation }: any) {
             </View>
             {reportDocuments.map(doc => renderDocumentCard(doc))}
 
-            {/* AI Recommendation Card - DYNAMIC FEATURE */}
-            <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => fetchAIInsights(true)}
-            >
-                <Card style={[styles.aiRecommendationCard, { backgroundColor: primaryColor + '05', borderColor: primaryColor + '20' }]}>
-                    <View style={[styles.aiIconContainer, { backgroundColor: primaryColor + '15' }]}>
-                        {analyzing ? <ActivityIndicator size="small" color={primaryColor} /> : <Sparkles color={primaryColor} size={20} />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <Text style={[styles.aiRecTitle, { color: textColor }]}>{t('aiAnalysis' as any, language)}</Text>
-                            {aiSummary && (
-                                <View style={{ backgroundColor: aiSummary.overallStatus === 'Healthy' ? '#10b98120' : '#f59e0b20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                    <Text style={{ fontSize: 10, color: aiSummary.overallStatus === 'Healthy' ? '#10b981' : '#f59e0b', fontWeight: 'bold' }}>
-                                        {aiSummary.overallStatus}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                        <Text style={[styles.aiRecText, { color: mutedColor }]} numberOfLines={3}>
-                            {aiSummary
-                                ? aiSummary.predictedCashFlow
-                                : 'Duke analizuar të dhënat tuaja financiare për të gjeneruar rekomandime të zgjuara...'}
-                        </Text>
-
-                        {aiSummary?.insights?.length > 0 && (
-                            <View style={{ marginTop: 10, flexDirection: 'row', gap: 8 }}>
-                                <View style={{ flex: 1, backgroundColor: primaryColor + '10', padding: 8, borderRadius: 8 }}>
-                                    <Text style={{ fontSize: 11, fontWeight: '700', color: primaryColor, marginBottom: 2 }}>{aiSummary.insights[0].title}</Text>
-                                    <Text style={{ fontSize: 10, color: mutedColor }} numberOfLines={1}>{aiSummary.insights[0].description}</Text>
-                                </View>
-                            </View>
-                        )}
-                    </View>
-                    <ChevronRight color={primaryColor} size={20} />
-                </Card>
-            </TouchableOpacity>
+            {/* AI Recommendation Card Removed */}
         </>
     );
 
@@ -633,20 +598,14 @@ export function FaturatScreen({ navigation }: any) {
                     <Text style={[styles.headerSubtitle, { color: mutedColor }]}>{new Date().toLocaleDateString(language, { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('invoices', language)}</Text>
                 </View>
-                <TouchableOpacity
-                    style={[styles.aiButton, { backgroundColor: primaryColor + '15' }]}
-                    onPress={() => fetchAIInsights(true)}
-                    disabled={analyzing}
-                >
-                    {analyzing ? (
-                        <ActivityIndicator size="small" color={primaryColor} />
-                    ) : (
-                        <Sparkles color={primaryColor} size={20} />
-                    )}
-                    <Text style={[styles.aiButtonText, { color: primaryColor }]}>
-                        {analyzing ? 'Analyzing...' : t('aiInsights' as any, language)}
-                    </Text>
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={[styles.profileButton, { backgroundColor: cardBg, marginRight: 8 }]}>
+                        <Briefcase color={isDark ? '#fff' : '#1e293b'} size={20} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={[styles.profileButton, { backgroundColor: cardBg }]}>
+                        <User color={isDark ? '#fff' : '#1e293b'} size={20} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Quick Actions Horizontal Scroller - NEW FEATURE */}
@@ -661,15 +620,7 @@ export function FaturatScreen({ navigation }: any) {
                         </View>
                         <Text style={[styles.quickActionLabel, { color: textColor }]}>{t('newInvoice', language)}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.quickActionCard, { backgroundColor: cardBg, borderColor }]}
-                        onPress={() => navigation.navigate('ScanBill')}
-                    >
-                        <View style={[styles.quickActionIcon, { backgroundColor: '#3b82f6' + '15' }]}>
-                            <ScanLine color="#3b82f6" size={18} />
-                        </View>
-                        <Text style={[styles.quickActionLabel, { color: textColor }]}>{t('scanBill', language)}</Text>
-                    </TouchableOpacity>
+                    {/* Scan Bill Removed */}
                     <TouchableOpacity
                         style={[styles.quickActionCard, { backgroundColor: cardBg, borderColor }]}
                         onPress={() => navigation.navigate('PaymentForm')}
@@ -756,6 +707,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
+    headerActions: { flexDirection: 'row', alignItems: 'center' },
+    profileButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
     headerSubtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
     title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
     aiButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 6 },

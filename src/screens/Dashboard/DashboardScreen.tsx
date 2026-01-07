@@ -318,34 +318,6 @@ export function DashboardScreen({ navigation }: any) {
                     {invoices.length === 0 && <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noInvoices', language)}</Text>}
                 </Card>
 
-                {/* Section 4: Scan Invoice */}
-                <View style={[styles.sectionHeader, { marginTop: 8 }]}>
-                    <View style={styles.sectionTitleRow}>
-                        <ScanLine color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('scanInvoice', language)}</Text>
-                    </View>
-                </View>
-
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => navigation.navigate('QRScanner')}
-                >
-                    <Card style={styles.scanCard}>
-                        <View style={styles.scanCardContent}>
-                            <View style={[styles.scanIconContainer, { backgroundColor: `${primaryColor}15` }]}>
-                                <QrCode color={primaryColor} size={40} />
-                            </View>
-                            <View style={styles.scanCardInfo}>
-                                <Text style={[styles.scanCardTitle, { color: textColor }]}>{t('scanInvoice', language)}</Text>
-                                <Text style={[styles.scanCardDescription, { color: mutedColor }]}>{t('scanInvoiceDescription', language)}</Text>
-                            </View>
-                            <View style={[styles.scanArrow, { backgroundColor: primaryColor }]}>
-                                <ArrowUpRight color="#fff" size={20} style={{ transform: [{ rotate: '45deg' }] }} />
-                            </View>
-                        </View>
-                    </Card>
-                </TouchableOpacity>
-
                 {/* Section 5: Profile & Settings */}
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
                     <View style={styles.sectionTitleRow}>
@@ -357,7 +329,7 @@ export function DashboardScreen({ navigation }: any) {
                 <View style={styles.profileGrid}>
                     <TouchableOpacity
                         activeOpacity={0.8}
-                        onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })}
+                        onPress={() => navigation.navigate('Profile')}
                         style={{ flex: 1 }}
                     >
                         <Card style={[styles.profileCard, { borderLeftColor: '#8b5cf6', borderLeftWidth: 4 }]}>

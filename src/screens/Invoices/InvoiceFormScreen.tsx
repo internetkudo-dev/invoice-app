@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,9 @@ import {
     StyleSheet,
     Switch,
     TextInput,
+    Keyboard,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { ArrowLeft, Plus, Minus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact, FileSignature } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SvgXml } from 'react-native-svg';
@@ -129,6 +131,30 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const [lineItems, setLineItems] = useState<LineItem[]>([
         { id: '1', description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 },
     ]);
+
+    // Reset form state when screen is focused for a new invoice (Fix #4: Unique invoice IDs)
+    useFocusEffect(
+        useCallback(() => {
+            if (!isEditing) {
+                // Reset line items for new invoice
+                setLineItems([{ id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 }]);
+                // Reset form data to defaults
+                setFormData(prev => ({
+                    ...prev,
+                    client_id: '',
+                    invoice_number: '',
+                    due_date: '',
+                    status: 'draft',
+                    discount_amount: 0,
+                    notes: '',
+                    is_recurring: false,
+                    buyer_signature_url: '',
+                    payment_method: 'bank',
+                    amount_received: 0,
+                }));
+            }
+        }, [isEditing])
+    );
 
     useEffect(() => {
         fetchInitialData();
@@ -289,7 +315,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
                 if (field === 'quantity' || field === 'unit_price') {
-                    updated.amount = updated.quantity * updated.unit_price;
+                    // Fix #3: Ensure decimal precision with proper rounding
+                    updated.amount = Math.round(updated.quantity * updated.unit_price * 100) / 100;
                 }
                 return updated;
             }
@@ -310,14 +337,20 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const selectProduct = (item: LineItem, product: Product) => {
+        // Fix #1: Dismiss keyboard to ensure UI updates properly
+        Keyboard.dismiss();
+
         setLineItems(items => items.map(i => {
             if (i.id === item.id) {
+                // Fix #3: Ensure decimal precision with proper rounding
+                const unitPrice = Math.round(Number(product.unit_price) * 100) / 100;
+                const amount = Math.round(i.quantity * unitPrice * 100) / 100;
                 return {
                     ...i,
                     description: product.name,
-                    unit_price: Number(product.unit_price),
+                    unit_price: unitPrice,
                     unit: product.unit || 'pcs',
-                    amount: i.quantity * Number(product.unit_price),
+                    amount: amount,
                     product_id: product.id,
                     tax_rate: product.tax_rate,
                 };

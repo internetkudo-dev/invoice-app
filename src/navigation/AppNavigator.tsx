@@ -11,6 +11,7 @@ import {
     ShieldAlert,
     Fingerprint,
     Wallet,
+    Users,
 } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -149,8 +150,11 @@ import { EmployeeVaultScreen } from '../screens/Employees/EmployeeVaultScreen';
 import { AttendanceScreen } from '../screens/Time/AttendanceScreen';
 import { LeaveRequestScreen } from '../screens/Time/LeaveRequestScreen';
 import { ScheduleScreen } from '../screens/Time/ScheduleScreen';
+import { ShiftFormScreen } from '../screens/Time/ShiftFormScreen';
 import { PayrollDashboardScreen } from '../screens/Payroll/PayrollDashboardScreen';
+import { PayrollDetailScreen } from '../screens/Payroll/PayrollDetailScreen';
 import { ComplianceScreen } from '../screens/Payroll/ComplianceScreen';
+import { HRDashboardScreen, JoinRequestsScreen } from '../screens/HR';
 
 function ManagementStack() {
     return (
@@ -205,6 +209,26 @@ function ExpensesStack() {
     );
 }
 
+// HR Stack - Standalone HR module
+function HRStack() {
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="HRDashboard" component={HRDashboardScreen} />
+            <Stack.Screen name="EmployeeDirectory" component={EmployeeDirectoryScreen} />
+            <Stack.Screen name="EmployeeForm" component={EmployeeFormScreen} />
+            <Stack.Screen name="EmployeeVault" component={EmployeeVaultScreen} />
+            <Stack.Screen name="JoinRequests" component={JoinRequestsScreen} />
+            <Stack.Screen name="Attendance" component={AttendanceScreen} />
+            <Stack.Screen name="LeaveRequests" component={LeaveRequestScreen} />
+            <Stack.Screen name="Schedule" component={ScheduleScreen} />
+            <Stack.Screen name="ShiftForm" component={ShiftFormScreen} />
+            <Stack.Screen name="Payroll" component={PayrollDashboardScreen} />
+            <Stack.Screen name="PayrollDetail" component={PayrollDetailScreen} />
+            <Stack.Screen name="Compliance" component={ComplianceScreen} />
+        </Stack.Navigator>
+    );
+}
+
 function MainTabs() {
     const { isDark, language } = useTheme();
 
@@ -229,7 +253,8 @@ function MainTabs() {
             <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ tabBarIcon: ({ color }) => <LayoutDashboard color={color} size={22} />, tabBarLabel: t('dashboard', language) }} />
             <Tab.Screen name="InvoicesTab" component={InvoicesStack} options={{ tabBarIcon: ({ color }) => <FileText color={color} size={22} />, tabBarLabel: t('invoices', language) }} />
             <Tab.Screen name="Management" component={ManagementStack} options={{ tabBarIcon: ({ color }) => <Briefcase color={color} size={22} />, tabBarLabel: t('management', language) }} />
-            <Tab.Screen name="ExpensesTab" component={ExpensesStack} options={{ tabBarIcon: ({ color }) => <Wallet color={color} size={22} />, tabBarLabel: t('expenses', language) }} />
+            <Tab.Screen name="HRTab" component={HRStack} options={{ tabBarIcon: ({ color }) => <Users color={color} size={22} />, tabBarLabel: 'HR' }} />
+            {/* ExpensesTab hidden per user request */}
         </Tab.Navigator>
     );
 }

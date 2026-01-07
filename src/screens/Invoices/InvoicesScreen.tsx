@@ -15,7 +15,7 @@ import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, StatusBadge, FAB } from '../../components/common';
-import { FileText, Users, Package } from 'lucide-react-native';
+import { FileText, Users, Package, Wallet, DollarSign } from 'lucide-react-native';
 import { Invoice, InvoiceStatus, Profile } from '../../types';
 import { formatCurrency } from '../../utils/format';
 import { t } from '../../i18n';
@@ -310,8 +310,9 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 actions={[
                     { label: t('newInvoice', language), icon: FileText, color: primaryColor, onPress: () => navigation.navigate('InvoiceForm', { type: 'invoice' }) },
                     { label: t('newOffer', language), icon: FileText, color: '#ec4899', onPress: () => navigation.navigate('InvoiceForm', { type: 'offer' }) },
-                    { label: 'New Contract', icon: FileText, color: '#8b5cf6', onPress: () => navigation.navigate('ContractForm') },
-                    { label: t('newClient', language), icon: Users, color: '#10b981', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'clients', openForm: true } }) },
+                    { label: 'Shto të ardhura', icon: DollarSign, color: '#10b981', onPress: () => navigation.navigate('PaymentsList') },
+                    { label: 'Shto shpenzim', icon: Wallet, color: '#ef4444', onPress: () => navigation.getParent()?.navigate('ExpensesTab', { screen: 'ExpenseForm' }) },
+                    { label: t('newClient', language), icon: Users, color: '#0ea5e9', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'clients', openForm: true } }) },
                     { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'products', openForm: true } }) },
                 ]}
             />

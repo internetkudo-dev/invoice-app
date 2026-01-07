@@ -83,25 +83,15 @@ export function ManageCompaniesScreen({ navigation }: any) {
 
         setLoading(true);
         try {
-            // 1. Create company
-            const { data: company, error: compError } = await supabase
-                .from('companies')
-                .insert({ company_name: newCompanyName })
-                .select()
-                .single();
+            // 1. Create company using RPC to avoid RLS race conditions
+            const { data, error } = await supabase
+                .rpc('create_company_and_owner', { p_company_name: newCompanyName });
 
-            if (compError) throw compError;
+            if (error) throw error;
 
-            // 2. Create membership
-            const { error: memError } = await supabase
-                .from('memberships')
-                .insert({
-                    user_id: user?.id,
-                    company_id: company.id,
-                    role: 'owner'
-                });
-
-            if (memError) throw memError;
+            // The RPC returns { id, company_name }, we need to treat it as the company object
+            const company = data as any;
+            if (!company?.id) throw new Error("Failed to create company");
 
             // 3. Switch to new company
             await handleSwitch(company.id);

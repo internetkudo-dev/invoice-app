@@ -139,12 +139,58 @@ export function SettingsScreen({ navigation }: any) {
 
     const handleExportData = async (format: 'json' | 'csv') => {
         try {
-            const { data: invoices } = await supabase.from('invoices').select('*, client:clients(*)').eq('user_id', user?.id);
-            const content = format === 'json' ? JSON.stringify(invoices, null, 2) : 'Date,Number,Client,Amount,Status\n' + invoices?.map(i => `${i.issue_date},${i.invoice_number},${i.client?.name},${i.total_amount},${i.status}`).join('\n');
-            const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
-            const fileUri = `${folder}invoices_backup.${format}`;
-            await FileSystem.writeAsStringAsync(fileUri, content);
-            await Sharing.shareAsync(fileUri);
+            const companyId = profile.active_company_id || profile.company_id || user?.id;
+
+            // Fetch all data for complete backup
+            const [
+                { data: invoices },
+                { data: invoiceItems },
+                { data: clients },
+                { data: products },
+                { data: expenses },
+                { data: payments }
+            ] = await Promise.all([
+                supabase.from('invoices').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
+                supabase.from('invoice_items').select('*'),
+                supabase.from('clients').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
+                supabase.from('products').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
+                supabase.from('expenses').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
+                supabase.from('payments').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
+            ]);
+
+            if (format === 'json') {
+                // Full JSON backup with all data
+                const backupData = {
+                    exportDate: new Date().toISOString(),
+                    version: '2.0.0',
+                    invoices: invoices || [],
+                    invoiceItems: invoiceItems || [],
+                    clients: clients || [],
+                    products: products || [],
+                    expenses: expenses || [],
+                    payments: payments || []
+                };
+                const content = JSON.stringify(backupData, null, 2);
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
+                const fileUri = `${folder}invoice_app_backup_${new Date().toISOString().split('T')[0]}.json`;
+                await FileSystem.writeAsStringAsync(fileUri, content);
+                await Sharing.shareAsync(fileUri);
+            } else {
+                // CSV export for accountant - invoices with totals
+                const csvHeader = 'Date,Invoice Number,Client Name,Subtotal,Tax,Discount,Total,Status,Payment Method\n';
+                const csvRows = invoices?.map(inv => {
+                    const client = clients?.find(c => c.id === inv.client_id);
+                    return `${inv.issue_date},${inv.invoice_number},"${client?.name || 'Guest'}",${inv.subtotal || 0},${inv.tax_amount || 0},${inv.discount_amount || 0},${inv.total_amount},${inv.status},${inv.payment_method || 'N/A'}`;
+                }).join('\n') || '';
+
+                const content = csvHeader + csvRows;
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
+                const fileUri = `${folder}invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+                await FileSystem.writeAsStringAsync(fileUri, content);
+                await Sharing.shareAsync(fileUri);
+            }
+
+            Alert.alert('Success', `Data exported successfully as ${format.toUpperCase()}`);
         } catch (error) {
             Alert.alert('Error', 'Failed to export data');
         }
@@ -255,7 +301,7 @@ export function SettingsScreen({ navigation }: any) {
                 </TouchableOpacity>
 
                 {/* Company Info */}
-                {renderHeader(t('companyProfile', language), Briefcase, 'company', '#6366f1')}
+                {renderHeader(t('companyProfile', language), Briefcase, 'company', primaryColor)}
                 {activeSection === 'company' && (
                     <Card style={styles.sectionContent}>
                         <Input label="Company Name" value={profile.company_name} onChangeText={(t) => setProfile({ ...profile, company_name: t })} />
@@ -267,7 +313,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Payments & Bank */}
-                {renderHeader(t('bankDetails', language), CreditCard, 'payments', '#10b981')}
+                {renderHeader(t('bankDetails', language), CreditCard, 'payments', primaryColor)}
                 {activeSection === 'payments' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>Bank Details (Apps on PDF)</Text>
@@ -293,7 +339,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Email & SMTP */}
-                {renderHeader('Email Settings (SMTP)', Mail, 'smtp', '#f59e0b')}
+                {renderHeader('Email Settings (SMTP)', Mail, 'smtp', primaryColor)}
                 {activeSection === 'smtp' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
@@ -316,7 +362,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* App Appearance & Layout Settings (Business Related) */}
-                {renderHeader('Document Layout', Layout, 'appearance', '#818cf8')}
+                {renderHeader('Document Layout', Layout, 'appearance', primaryColor)}
                 {activeSection === 'appearance' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.label, { color: textColor }]}>Default Terms & Conditions</Text>
@@ -372,7 +418,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Identity & Visuals */}
-                {renderHeader('Logos & Signatures', Camera, 'visuals', '#ec4899')}
+                {renderHeader('Logos & Signatures', Camera, 'visuals', primaryColor)}
                 {activeSection === 'visuals' && (
                     <Card style={styles.sectionContent}>
                         <AssetPicker label="Company Logo" value={profile.logo_url} onPick={() => pickImage('logo')} onClear={() => setProfile({ ...profile, logo_url: '' })} icon={ImageIcon} isDark={isDark} />
@@ -390,7 +436,7 @@ export function SettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Team & Collaboration */}
-                {renderHeader('Team & Collaboration', Users, 'team', '#10b981')}
+                {renderHeader('Team & Collaboration', Users, 'team', primaryColor)}
                 {activeSection === 'team' && (
                     <Card style={styles.sectionContent}>
                         <View style={styles.rowBetween}>
@@ -436,7 +482,7 @@ export function SettingsScreen({ navigation }: any) {
                                 />
                             </View>
                             <TouchableOpacity
-                                style={[styles.smallActionBtn, { backgroundColor: '#10b981', marginLeft: 8, height: 50, marginTop: 4 }]}
+                                style={[styles.smallActionBtn, { backgroundColor: primaryColor, marginLeft: 8, height: 50, marginTop: 4 }]}
                                 onPress={() => joinCompany(joinId)}
                             >
                                 <Plus color="#fff" size={20} />
@@ -460,7 +506,7 @@ export function SettingsScreen({ navigation }: any) {
 
 
                 {/* Data Management */}
-                {renderHeader('Backup & Account', Download, 'data', '#64748b')}
+                {renderHeader('Backup & Account', Download, 'data', primaryColor)}
                 {activeSection === 'data' && (
                     <Card style={styles.sectionContent}>
                         <Button title="Backup All Data (JSON)" variant="outline" onPress={() => handleExportData('json')} icon={Download} />
