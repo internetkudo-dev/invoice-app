@@ -12,7 +12,7 @@ import {
     TextInput,
     Keyboard,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, CommonActions } from '@react-navigation/native';
 import { ArrowLeft, Plus, Minus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact, FileSignature } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SvgXml } from 'react-native-svg';
@@ -32,10 +32,12 @@ interface LineItem {
     id: string;
     product_id?: string;
     description: string;
+    sku?: string;
     quantity: number;
     unit_price: number;
     unit: string;
     tax_rate?: number;
+    discount?: number;
     amount: number;
 }
 
@@ -156,6 +158,18 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         }, [isEditing])
     );
 
+    // Safe navigation back - always go to FaturatMain to stay on invoice tab
+    // This prevents going back to Dashboard when navigated from there
+    const safeGoBack = () => {
+        // Always navigate to FaturatMain to stay on the Invoices tab
+        navigation.dispatch(
+            CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'FaturatMain' }],
+            })
+        );
+    };
+
     useEffect(() => {
         fetchInitialData();
         if (isEditing) {
@@ -243,11 +257,18 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             });
         }
 
-        const { data: items } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
-        if (items && items.length > 0) setLineItems(items.map(it => ({
+        // Join with products to get SKU if not saved in item
+        const { data: items } = await supabase
+            .from('invoice_items')
+            .select('*, product:products(sku)')
+            .eq('invoice_id', invoiceId);
+
+        if (items && items.length > 0) setLineItems(items.map((it: any) => ({
             ...it,
+            sku: it.sku || it.product?.sku,
             quantity: Number(it.quantity),
             unit_price: Number(it.unit_price),
+            discount: Number(it.discount) || 0,
             amount: Number(it.amount)
         })));
     };
@@ -315,15 +336,21 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             if (item.id === id) {
                 const updated = { ...item, [field]: value };
 
-                // Recalculate amount if quantity, price, or tax changes
-                if (field === 'quantity' || field === 'unit_price' || field === 'tax_rate') {
-                    const qty = field === 'quantity' ? value : item.quantity;
-                    const price = field === 'unit_price' ? value : item.unit_price;
-                    const tax = field === 'tax_rate' ? value : (item.tax_rate || 18);
+                // Recalculate amount if quantity, price, tax, or discount changes
+                if (field === 'quantity' || field === 'unit_price' || field === 'tax_rate' || field === 'discount') {
+                    const qty = field === 'quantity' ? Number(value) : item.quantity;
+                    const price = field === 'unit_price' ? Number(value) : item.unit_price;
+                    const tax = field === 'tax_rate' ? Number(value) : (item.tax_rate || 0);
+                    const discount = field === 'discount' ? Number(value) : (item.discount || 0);
 
-                    // Amount = Qty * Price * (1 + Tax/100)
-                    updated.amount = Math.round(qty * price * (1 + tax / 100) * 100) / 100;
+                    // Amount = (Qty * Price * (1 - Discount/100)) * (1 + Tax/100)
+                    const netPrice = qty * price;
+                    const discountedNet = netPrice * (1 - discount / 100);
+                    const total = discountedNet * (1 + tax / 100);
+
+                    updated.amount = Math.round(total * 100) / 100;
                     updated.tax_rate = tax;
+                    updated.discount = discount;
                 }
                 return updated;
             }
@@ -355,11 +382,13 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 return {
                     ...i,
                     description: product.name,
+                    sku: product.sku,
                     unit_price: unitPrice,
                     unit: product.unit || 'pcs',
                     amount: amount,
                     product_id: product.id,
                     tax_rate: taxRate,
+                    discount: 0,
                 };
             }
             return i;
@@ -479,10 +508,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                     invoice_id: savedId,
                     product_id: it.product_id || null,
                     description: it.description,
+                    sku: it.sku || null,
                     quantity: it.quantity,
                     unit_price: it.unit_price,
                     unit: it.unit,
                     tax_rate: currentConfig.showTax ? (it.tax_rate !== undefined ? it.tax_rate : defaultTaxRate) : 0,
+                    discount: it.discount || 0,
                     amount: it.amount,
                 }));
 
@@ -496,7 +527,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
             console.log('Invoice saved successfully:', savedId);
             setLoading(false);
-            navigation.goBack();
+            // Navigate to the invoice detail page instead of going back
+            navigation.replace('InvoiceDetail', { invoiceId: savedId });
         } catch (error: any) {
             console.error('Error saving invoice:', error);
             Alert.alert('Error', 'Failed to save invoice: ' + error.message);
@@ -509,7 +541,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity onPress={safeGoBack} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
@@ -525,6 +557,12 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 <View style={[styles.typeBadge, { backgroundColor: `${currentConfig.color}20` }]}>
                     <Text style={[styles.typeBadgeText, { color: currentConfig.color }]}>{currentConfig.prefix}</Text>
                 </View>
+                <TouchableOpacity
+                    onPress={safeGoBack}
+                    style={[styles.cancelButton, { backgroundColor: isDark ? '#334155' : '#f1f5f9' }]}
+                >
+                    <Text style={[styles.cancelButtonText, { color: mutedColor }]}>Cancel</Text>
+                </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -713,7 +751,15 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                         </View>
 
                         <View style={styles.row}>
-                            <View style={{ flex: 1.2 }}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                                <Input
+                                    label="SKU / Code"
+                                    value={item.sku || ''}
+                                    onChangeText={t => updateLineItem(item.id, 'sku', t)}
+                                    placeholder="Optional"
+                                />
+                            </View>
+                            <View style={{ flex: 0.8 }}>
                                 <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>{t('quantity', language)}</Text>
                                 <View style={styles.qtyContainer}>
                                     <TouchableOpacity
@@ -737,13 +783,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                            <View style={{ flex: 1.5, flexDirection: 'row', gap: 8 }}>
-                                <View style={{ flex: 1 }}>
-                                    <Input label={t('price', language)} value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
-                                </View>
-                                <View style={{ width: 60 }}>
-                                    <Input label="Tvsh %" value={String(item.tax_rate || 18)} onChangeText={t => updateLineItem(item.id, 'tax_rate', Number(t) || 0)} keyboardType="numeric" />
-                                </View>
+                        </View>
+
+                        <View style={[styles.row, { marginTop: 10 }]}>
+                            <View style={{ flex: 1.5 }}>
+                                <Input label={t('price', language)} value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
+                            </View>
+                            <View style={{ width: 70, marginLeft: 8 }}>
+                                <Input label="Disc %" value={String(item.discount || 0)} onChangeText={t => updateLineItem(item.id, 'discount', Number(t) || 0)} keyboardType="numeric" />
+                            </View>
+                            <View style={{ width: 60, marginLeft: 8 }}>
+                                <Input label="Tvsh %" value={String(item.tax_rate || 18)} onChangeText={t => updateLineItem(item.id, 'tax_rate', Number(t) || 0)} keyboardType="numeric" />
                             </View>
                         </View>
 
@@ -1182,4 +1232,6 @@ const styles = StyleSheet.create({
     previewSummaryValue: { fontSize: 12, fontWeight: 'bold', color: '#6366f1' },
     previewSignLine: { width: '80%', height: 1, backgroundColor: '#e2e8f0', marginTop: 15 },
     previewSignLabel: { fontSize: 6, color: '#94a3b8', marginTop: 4 },
+    cancelButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginLeft: 8 },
+    cancelButtonText: { fontSize: 13, fontWeight: '600' },
 });

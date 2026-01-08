@@ -88,7 +88,7 @@ export async function printPdf(
  */
 export async function previewPdf(
     data: InvoiceData,
-    template: TemplateType = 'classic'
+    template: TemplateType = 'hidroterm'
 ): Promise<void> {
     const html = generateInvoiceHtml(data, template);
 

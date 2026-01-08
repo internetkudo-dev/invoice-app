@@ -11,14 +11,16 @@ import {
     ScrollView,
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
 
 interface SignUpScreenProps {
     onNavigateToSignIn: () => void;
-    navigation?: any; // Added for direct navigation
+    navigation?: any;
 }
 
 export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenProps) {
     const { signUp, verifyEmailOtp } = useAuth();
+    const { isDark, primaryColor } = useTheme();
     const [email, setEmail] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
@@ -30,6 +32,15 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+
+    // Dynamic theme colors
+    const bgColor = isDark ? '#0f172a' : '#f8fafc';
+    const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const inputBg = isDark ? '#0f172a' : '#f1f5f9';
+    const textColor = isDark ? '#fff' : '#1e293b';
+    const labelColor = isDark ? '#e2e8f0' : '#374151';
+    const mutedColor = isDark ? '#94a3b8' : '#64748b';
+    const borderColor = isDark ? '#334155' : '#e2e8f0';
 
     const handleSignUp = async () => {
         if (!email || !password || !confirmPassword || !firstName || !lastName || !phone) {
@@ -86,8 +97,6 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
             if (error) {
                 setError(error.message);
             } else {
-                // Determine what to do after success. Usually session is set and auth listener navigates.
-                // Or user can sign in.
                 onNavigateToSignIn();
             }
         } catch (e) {
@@ -99,10 +108,10 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
 
     if (success) {
         return (
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
                 <View style={styles.successBox}>
                     <Text style={styles.successTitle}>Verify Email</Text>
-                    <Text style={styles.successText}>
+                    <Text style={[styles.successText, { color: mutedColor }]}>
                         Please enter the verification code sent to {email}
                     </Text>
 
@@ -113,21 +122,21 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     ) : null}
 
                     <TextInput
-                        style={[styles.input, { width: '100%', textAlign: 'center', fontSize: 24, letterSpacing: 4 }]}
+                        style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor, width: '100%', textAlign: 'center', fontSize: 24, letterSpacing: 4 }]}
                         placeholder="000000"
-                        placeholderTextColor="#64748b"
+                        placeholderTextColor={mutedColor}
                         value={verificationCode}
                         onChangeText={setVerificationCode}
                         keyboardType="number-pad"
                         maxLength={6}
                     />
 
-                    <TouchableOpacity style={[styles.button, { marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
+                    <TouchableOpacity style={[styles.button, { backgroundColor: primaryColor, marginTop: 24, width: '100%' }]} onPress={handleVerify} disabled={loading}>
                         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify Code</Text>}
                     </TouchableOpacity>
 
                     <TouchableOpacity style={{ marginTop: 16 }} onPress={onNavigateToSignIn}>
-                        <Text style={styles.link}>Skip to Sign In</Text>
+                        <Text style={[styles.link, { color: primaryColor }]}>Skip to Sign In</Text>
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
@@ -137,18 +146,18 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
+            style={[styles.container, { backgroundColor: bgColor }]}
         >
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.header}>
-                    <Text style={styles.title}>Create Account</Text>
-                    <Text style={styles.subtitle}>Start managing your invoices</Text>
+                    <Text style={[styles.title, { color: primaryColor }]}>Create Account</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>Start managing your invoices</Text>
                 </View>
 
-                <View style={styles.form}>
+                <View style={[styles.form, { backgroundColor: cardBg }]}>
                     {error ? (
                         <View style={styles.errorBox}>
                             <Text style={styles.errorText}>{error}</Text>
@@ -156,33 +165,33 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     ) : null}
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Name *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Name *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="First Name"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={firstName}
                             onChangeText={setFirstName}
                         />
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Last Name *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Last Name *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Last Name"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={lastName}
                             onChangeText={setLastName}
                         />
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Email *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Email *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Enter your email"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={email}
                             onChangeText={setEmail}
                             keyboardType="email-address"
@@ -191,11 +200,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Password *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Password *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Create a password"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
@@ -203,11 +212,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Confirm Password *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Confirm Password *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Confirm your password"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
                             secureTextEntry
@@ -215,11 +224,11 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Phone Number *</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Phone Number *</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="+1 234 567 8900"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={phone}
                             onChangeText={setPhone}
                             keyboardType="phone-pad"
@@ -227,29 +236,29 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Company Name</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Company Name</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Your Company Details"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={companyName}
                             onChangeText={setCompanyName}
                         />
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Company Registered Number</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Company Registered Number</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Tax ID / Registration"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={companyRegNumber}
                             onChangeText={setCompanyRegNumber}
                         />
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
+                        style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]}
                         onPress={handleSignUp}
                         disabled={loading}
                     >
@@ -261,16 +270,16 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
                     </TouchableOpacity>
 
                     <View style={styles.footer}>
-                        <Text style={styles.footerText}>Already have an account?</Text>
+                        <Text style={[styles.footerText, { color: mutedColor }]}>Already have an account?</Text>
                         <TouchableOpacity onPress={onNavigateToSignIn}>
-                            <Text style={styles.link}>Sign In</Text>
+                            <Text style={[styles.link, { color: primaryColor }]}>Sign In</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={[styles.footer, { marginTop: 12 }]}>
-                        <Text style={styles.footerText}>Joining a company?</Text>
+                        <Text style={[styles.footerText, { color: mutedColor }]}>Joining a company?</Text>
                         <TouchableOpacity onPress={() => (navigation as any).navigate('JoinTeam')}>
-                            <Text style={styles.link}>Enter Invite Code</Text>
+                            <Text style={[styles.link, { color: primaryColor }]}>Enter Invite Code</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -282,7 +291,6 @@ export function SignUpScreen({ onNavigateToSignIn, navigation }: SignUpScreenPro
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0f172a',
     },
     scrollContent: {
         flexGrow: 1,
@@ -296,15 +304,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#818cf8',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#94a3b8',
     },
     form: {
-        backgroundColor: '#1e293b',
         borderRadius: 16,
         padding: 24,
     },
@@ -333,7 +338,6 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     successText: {
-        color: '#94a3b8',
         textAlign: 'center',
         marginBottom: 24,
         lineHeight: 24,
@@ -342,21 +346,16 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     label: {
-        color: '#e2e8f0',
         marginBottom: 8,
         fontWeight: '500',
     },
     input: {
-        backgroundColor: '#0f172a',
         borderWidth: 1,
-        borderColor: '#334155',
         borderRadius: 12,
         padding: 16,
-        color: '#fff',
         fontSize: 16,
     },
     button: {
-        backgroundColor: '#6366f1',
         borderRadius: 12,
         padding: 16,
         alignItems: 'center',
@@ -377,10 +376,8 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     footerText: {
-        color: '#94a3b8',
     },
     link: {
-        color: '#818cf8',
         fontWeight: '600',
     },
 });

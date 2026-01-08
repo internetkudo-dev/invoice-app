@@ -128,6 +128,9 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 email: client?.email || '',
                 phone: client?.phone || '',
                 taxId: client?.tax_id || '',
+                nui: client?.nui || '',
+                fiscalNumber: client?.fiscal_number || '',
+                vatNumber: client?.vat_number || '',
             },
             details: {
                 number: invoice.invoice_number,
@@ -141,6 +144,8 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 paymentMethod: invoice.payment_method,
                 amountReceived: Number(invoice.amount_received),
                 changeAmount: Number(invoice.change_amount),
+                type: invoice.type,
+                subtype: (invoice as any).subtype || 'regular',
             },
             items: items.map((item) => ({
                 description: item.description,

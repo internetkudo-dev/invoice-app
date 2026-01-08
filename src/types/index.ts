@@ -296,6 +296,8 @@ export interface InvoiceData {
         email: string;
         phone?: string;
         taxId?: string;
+        nui?: string;
+        fiscalNumber?: string;
         vatNumber?: string;
         deliveryName?: string;
         deliveryAddress?: string;
@@ -311,6 +313,7 @@ export interface InvoiceData {
         terms?: string;
         buyerSignatureUrl?: string;
         type?: 'invoice' | 'offer';
+        subtype?: string;
         showBuyerSignature?: boolean;
         paymentMethod?: PaymentMethod;
         amountReceived?: number;

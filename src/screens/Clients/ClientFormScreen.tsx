@@ -36,6 +36,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
         zip_code: '',
         country: '',
         tax_id: '',
+        nui: '',
+        fiscal_number: '',
+        vat_number: '',
         discount_percent: 0,
         notes: '',
     });
@@ -61,6 +64,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
             zip_code: data.zip_code || '',
             country: data.country || '',
             tax_id: data.tax_id || '',
+            nui: data.nui || '',
+            fiscal_number: data.fiscal_number || '',
+            vat_number: data.vat_number || '',
             discount_percent: data.discount_percent || 0,
             notes: data.notes || '',
         });
@@ -167,7 +173,9 @@ export function ClientFormScreen({ navigation, route }: ClientFormScreenProps) {
                             </TouchableOpacity>
                         </View>
                     </View>
-                    <Input label="Tax ID / VAT Number" value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
+                    <Input label="Tax ID / NUI (Numri Unik Identifikues)" value={formData.nui || formData.tax_id} onChangeText={(text) => setFormData({ ...formData, nui: text, tax_id: text })} placeholder="NUI / Tax ID" />
+                    <Input label="Numri Fiskal" value={formData.fiscal_number} onChangeText={(text) => setFormData({ ...formData, fiscal_number: text })} placeholder="Numri Fiskal" />
+                    <Input label="Numri i TVSH (VAT Number)" value={formData.vat_number} onChangeText={(text) => setFormData({ ...formData, vat_number: text })} placeholder="VAT Number" />
                 </View>
 
                 {/* Discount */}

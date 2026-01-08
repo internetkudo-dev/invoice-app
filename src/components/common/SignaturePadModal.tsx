@@ -1,5 +1,5 @@
-import React, { useRef, useState, useMemo } from 'react';
-import { View, Modal, StyleSheet, TouchableOpacity, Text, PanResponder, Dimensions } from 'react-native';
+import React, { useRef, useState, useCallback } from 'react';
+import { View, Modal, StyleSheet, TouchableOpacity, Text, GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { X, Check, Trash2 } from 'lucide-react-native';
 
@@ -11,105 +11,124 @@ interface SignaturePadModalProps {
 }
 
 export function SignaturePadModal({ visible, onClose, onSave, primaryColor }: SignaturePadModalProps) {
-    const [currentPath, setCurrentPath] = useState<string>('');
     const [paths, setPaths] = useState<string[]>([]);
-    const [layout, setLayout] = useState({ width: 0, height: 0 });
-    const pathRef = useRef<string>('');
+    const [currentPath, setCurrentPath] = useState<string>('');
+    const [layout, setLayout] = useState({ width: 300, height: 200 });
+    const isDrawingRef = useRef(false);
 
-    const panResponder = useMemo(
-        () =>
-            PanResponder.create({
-                onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: () => true,
-                onPanResponderGrant: (evt) => {
-                    const { locationX, locationY } = evt.nativeEvent;
-                    pathRef.current = `M${locationX.toFixed(0)},${locationY.toFixed(0)}`;
-                    setCurrentPath(pathRef.current);
-                },
-                onPanResponderMove: (evt) => {
-                    const { locationX, locationY } = evt.nativeEvent;
-                    pathRef.current += ` L${locationX.toFixed(0)},${locationY.toFixed(0)}`;
-                    setCurrentPath(pathRef.current);
-                },
-                onPanResponderRelease: () => {
-                    if (pathRef.current) {
-                        setPaths((prev) => [...prev, pathRef.current]);
-                    }
-                    pathRef.current = '';
-                    setCurrentPath('');
-                },
-                onPanResponderTerminate: () => {
-                    if (pathRef.current) {
-                        setPaths((prev) => [...prev, pathRef.current]);
-                    }
-                    pathRef.current = '';
-                    setCurrentPath('');
-                },
-            }),
-        []
-    );
-
-    const handleClear = () => {
+    // Reset state when modal opens
+    const handleModalShow = useCallback(() => {
         setPaths([]);
         setCurrentPath('');
-        pathRef.current = '';
-    };
+        isDrawingRef.current = false;
+    }, []);
 
-    const handleSave = () => {
+    const handleTouchStart = useCallback((event: GestureResponderEvent) => {
+        event.stopPropagation();
+        const { locationX, locationY } = event.nativeEvent;
+        isDrawingRef.current = true;
+        setCurrentPath(`M${locationX.toFixed(1)},${locationY.toFixed(1)}`);
+    }, []);
+
+    const handleTouchMove = useCallback((event: GestureResponderEvent) => {
+        if (!isDrawingRef.current) return;
+        event.stopPropagation();
+        const { locationX, locationY } = event.nativeEvent;
+        setCurrentPath(prev => prev + ` L${locationX.toFixed(1)},${locationY.toFixed(1)}`);
+    }, []);
+
+    const handleTouchEnd = useCallback(() => {
+        if (!isDrawingRef.current) return;
+        isDrawingRef.current = false;
+        setCurrentPath(prev => {
+            if (prev && prev.length > 5) {
+                setPaths(paths => [...paths, prev]);
+            }
+            return '';
+        });
+    }, []);
+
+    const handleClear = useCallback(() => {
+        setPaths([]);
+        setCurrentPath('');
+        isDrawingRef.current = false;
+    }, []);
+
+    const handleLayout = useCallback((e: LayoutChangeEvent) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) {
+            setLayout({ width, height });
+        }
+    }, []);
+
+    const handleSave = useCallback(() => {
         if (paths.length === 0) return;
 
-        // Construct a full SVG string for saving as a data URI (simplified)
-        // In a real app, you might capture the view as an image using view-shot
-        // For now, let's save it as a data URI of an SVG.
-        // NOTE: React Native Image component usually can't render SVG data URIs directly without some bridging.
-        // A better approach for mostly-offline apps without heavy deps is unfortunately complex.
-        // However, for PDF generation (expo-print), SVG strings often work or need conversion.
-        // Given constraints, let's try to convert to a base64 png if possible or return the SVG string to render.
-        // Wait, standard Image component doesn't support SVG string.
-        // We will assume 'expo-drawing' or similar isn't here. 
-        // We will return a special prefix "SVG:" and handle rendering separately or...
-        // Actually, the simplest way is to pass the paths and render them in a preview.
-        // But the user wants an image url for the PDF.
-        // We can use a trick: save the SVG as a file and return the URI? No, needs conversion.
-        // Let's use a very basic approximation: generate an SVG string data URI.
-        // "data:image/svg+xml;base64,..."
+        // Generate SVG string
+        const allPaths = paths.join(' ');
+        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" fill="none"><path d="${allPaths}" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-        const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" fill="none">
-            <path d="${paths.join(' ')}" stroke="black" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>`;
-
-        // Encode to base64
-        const base64 = `data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`;
-        // Note: react-native-svg should render this if we use SvgXml.
-        // But passing it to the PDF builder needs to be checked.
-        // If PDF builder assumes <img src="...">, standard web browsers support svg data uris.
+        // Encode to base64 data URI
+        const base64 = `data:image/svg+xml,${encodeURIComponent(svgContent)}`;
 
         onSave(base64);
         onClose();
         handleClear();
-    };
+    }, [paths, layout, onSave, onClose, handleClear]);
+
+    const handleClose = useCallback(() => {
+        handleClear();
+        onClose();
+    }, [onClose, handleClear]);
 
     return (
-        <Modal visible={visible} animationType="slide" transparent>
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent
+            onShow={handleModalShow}
+        >
             <View style={styles.container}>
                 <View style={styles.content}>
                     <View style={styles.header}>
                         <Text style={styles.title}>Sign Here</Text>
-                        <TouchableOpacity onPress={onClose}>
+                        <TouchableOpacity onPress={handleClose}>
                             <X color="#64748b" size={24} />
                         </TouchableOpacity>
                     </View>
 
                     <View
                         style={styles.padContainer}
-                        {...panResponder.panHandlers}
-                        onLayout={(e) => setLayout(e.nativeEvent.layout)}
+                        onLayout={handleLayout}
+                        onStartShouldSetResponder={() => true}
+                        onMoveShouldSetResponder={() => true}
+                        onResponderGrant={handleTouchStart}
+                        onResponderMove={handleTouchMove}
+                        onResponderRelease={handleTouchEnd}
+                        onResponderTerminate={handleTouchEnd}
                     >
                         <Svg height="100%" width="100%">
                             {paths.map((d, i) => (
-                                <Path key={i} d={d} stroke="black" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                <Path
+                                    key={i}
+                                    d={d}
+                                    stroke="black"
+                                    strokeWidth={3}
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
                             ))}
-                            <Path d={currentPath} stroke="black" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            {currentPath.length > 0 && (
+                                <Path
+                                    d={currentPath}
+                                    stroke="black"
+                                    strokeWidth={3}
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            )}
                         </Svg>
                         {paths.length === 0 && currentPath === '' && (
                             <Text style={styles.placeholder}>Draw your signature here</Text>
@@ -166,17 +185,20 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f8fafc',
         borderRadius: 8,
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: '#e2e8f0',
+        borderStyle: 'dashed',
         overflow: 'hidden',
     },
     placeholder: {
         position: 'absolute',
         top: '50%',
-        left: '50%',
-        transform: [{ translateX: -70 }, { translateY: -10 }],
-        color: '#cbd5e1',
-        pointerEvents: 'none'
+        left: 0,
+        right: 0,
+        textAlign: 'center',
+        color: '#94a3b8',
+        fontSize: 16,
+        marginTop: -10,
     },
     footer: {
         flexDirection: 'row',

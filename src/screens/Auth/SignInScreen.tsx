@@ -11,6 +11,7 @@ import {
     ScrollView,
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
 import { SvgXml } from 'react-native-svg';
 
 const googleLogoXml = `
@@ -28,10 +29,20 @@ interface SignInScreenProps {
 
 export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
     const { signIn, signInWithGoogle } = useAuth();
+    const { isDark, primaryColor } = useTheme();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Dynamic theme colors
+    const bgColor = isDark ? '#0f172a' : '#f8fafc';
+    const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const inputBg = isDark ? '#0f172a' : '#f1f5f9';
+    const textColor = isDark ? '#fff' : '#1e293b';
+    const labelColor = isDark ? '#e2e8f0' : '#374151';
+    const mutedColor = isDark ? '#94a3b8' : '#64748b';
+    const borderColor = isDark ? '#334155' : '#e2e8f0';
 
     const handleSignIn = async () => {
         if (!email || !password) {
@@ -57,18 +68,18 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
+            style={[styles.container, { backgroundColor: bgColor }]}
         >
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.header}>
-                    <Text style={styles.title}>Invoice Pro</Text>
-                    <Text style={styles.subtitle}>Sign in to your account</Text>
+                    <Text style={[styles.title, { color: primaryColor }]}>Invoice Pro</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>Sign in to your account</Text>
                 </View>
 
-                <View style={styles.form}>
+                <View style={[styles.form, { backgroundColor: cardBg }]}>
                     {error ? (
                         <View style={styles.errorBox}>
                             <Text style={styles.errorText}>{error}</Text>
@@ -76,11 +87,11 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     ) : null}
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Email</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Email</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Enter your email"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={email}
                             onChangeText={setEmail}
                             keyboardType="email-address"
@@ -89,11 +100,11 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Password</Text>
+                        <Text style={[styles.label, { color: labelColor }]}>Password</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { backgroundColor: inputBg, borderColor, color: textColor }]}
                             placeholder="Enter your password"
-                            placeholderTextColor="#64748b"
+                            placeholderTextColor={mutedColor}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
@@ -101,7 +112,7 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.button, loading && styles.buttonDisabled]}
+                        style={[styles.button, { backgroundColor: primaryColor }, loading && styles.buttonDisabled]}
                         onPress={handleSignIn}
                         disabled={loading}
                     >
@@ -113,14 +124,14 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     </TouchableOpacity>
 
                     <View style={styles.divider}>
-                        <View style={styles.line} />
-                        <Text style={styles.dividerText}>OR</Text>
-                        <View style={styles.line} />
+                        <View style={[styles.line, { backgroundColor: borderColor }]} />
+                        <Text style={[styles.dividerText, { color: mutedColor }]}>OR</Text>
+                        <View style={[styles.line, { backgroundColor: borderColor }]} />
                     </View>
 
 
                     <TouchableOpacity
-                        style={styles.googleButton}
+                        style={[styles.googleButton, { borderColor }]}
                         onPress={async () => {
                             setLoading(true);
                             const { error } = await signInWithGoogle();
@@ -136,9 +147,9 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
                     </TouchableOpacity>
 
                     <View style={styles.footer}>
-                        <Text style={styles.footerText}>Don't have an account?</Text>
+                        <Text style={[styles.footerText, { color: mutedColor }]}>Don't have an account?</Text>
                         <TouchableOpacity onPress={onNavigateToSignUp}>
-                            <Text style={styles.link}>Sign Up</Text>
+                            <Text style={[styles.link, { color: primaryColor }]}>Sign Up</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -150,7 +161,6 @@ export function SignInScreen({ onNavigateToSignUp }: SignInScreenProps) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0f172a',
     },
     scrollContent: {
         flexGrow: 1,
@@ -164,15 +174,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#818cf8',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#94a3b8',
     },
     form: {
-        backgroundColor: '#1e293b',
         borderRadius: 16,
         padding: 24,
     },
@@ -192,21 +199,16 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     label: {
-        color: '#e2e8f0',
         marginBottom: 8,
         fontWeight: '500',
     },
     input: {
-        backgroundColor: '#0f172a',
         borderWidth: 1,
-        borderColor: '#334155',
         borderRadius: 12,
         padding: 16,
-        color: '#fff',
         fontSize: 16,
     },
     button: {
-        backgroundColor: '#6366f1',
         borderRadius: 12,
         padding: 16,
         alignItems: 'center',
@@ -227,10 +229,8 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     footerText: {
-        color: '#94a3b8',
     },
     link: {
-        color: '#818cf8',
         fontWeight: '600',
     },
     divider: {
@@ -241,10 +241,8 @@ const styles = StyleSheet.create({
     line: {
         flex: 1,
         height: 1,
-        backgroundColor: '#334155',
     },
     dividerText: {
-        color: '#94a3b8',
         marginHorizontal: 10,
         fontSize: 12,
         fontWeight: '600',
@@ -256,7 +254,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 8,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
     },
     googleButtonText: {
         color: '#1e293b',

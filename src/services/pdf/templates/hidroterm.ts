@@ -26,10 +26,25 @@ export function hidrotermTemplate(data: InvoiceData): string {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('de-DE'); // DD.MM.YYYY
+    const date = new Date(dateStr);
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${dd}/${mm}/${yyyy}`; // DD/MM/YYYY format
   };
 
 
+  // Document type labels in Albanian
+  const documentLabels: Record<string, string> = {
+    'regular': 'Faturë',
+    'delivery_note': 'Fletëdërgesë',
+    'offer': 'Ofertë',
+    'order': 'Porosi',
+    'pro_invoice': 'Profaturë',
+  };
+
+  // Get the document label based on subtype
+  const documentLabel = documentLabels[data.details.subtype || 'regular'] || 'Faturë';
 
   // Generate QR for footer
   const qrData = encodeURIComponent(`invoiceapp://invoice/${data.details.number}`);
@@ -43,17 +58,22 @@ export function hidrotermTemplate(data: InvoiceData): string {
   <style>
     @page { size: A4; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { height: 297mm; }
-    body {
-      width: 210mm;
-      min-height: 297mm;
+    html, body { 
+      width: 210mm; 
       margin: 0 auto;
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 10px;
+      font-size: 14px;
       color: #000;
       background: #fff;
+    }
+    body {
       padding: 10mm;
-      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: auto;
+    }
+    .main-content {
+      flex: 1;
     }
     
     /* Header Layout */
@@ -66,46 +86,46 @@ export function hidrotermTemplate(data: InvoiceData): string {
         padding-bottom: 15px;
     }
     .brand-section { text-align: left; }
-    .brand-name { font-size: 24px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; }
-    .invoice-header-line { font-size: 14px; font-weight: 900; letter-spacing: 0.5px; }
+    .brand-name { font-size: 32px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; }
+    .invoice-header-line { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; }
 
     .qr-section { text-align: right; }
 
     /* Info Columns */
     .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ccc; }
     .info-col { width: 48%; }
-    .info-title { font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
-    .info-row { display: flex; margin-bottom: 2px; }
-    .label { width: 80px; font-weight: bold; font-size: 9px; }
-    .value { flex: 1; font-size: 9px; }
+    .info-title { font-weight: bold; font-size: 15px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+    .info-row { display: flex; margin-bottom: 4px; }
+    .label { width: 100px; font-weight: bold; font-size: 13px; }
+    .value { flex: 1; font-size: 13px; }
 
     /* Meta Grid */
-    .meta-grid { display: flex; gap: 10px; margin-bottom: 20px; font-size: 9px; }
-    .meta-item { border: 1px solid #ccc; padding: 4px; flex: 1; }
+    .meta-grid { display: flex; gap: 10px; margin-bottom: 20px; font-size: 13px; }
+    .meta-item { border: 1px solid #ccc; padding: 8px; flex: 1; }
     .meta-label { font-weight: bold; display: block; margin-bottom: 2px; }
 
     /* Table */
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9px; }
-    th { background: #333; color: #fff; padding: 6px 4px; text-align: center; font-weight: bold; border: 1px solid #000; }
-    td { border: 1px solid #000; padding: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+    th { background: #333; color: #fff; padding: 10px 6px; text-align: center; font-weight: bold; border: 1px solid #000; font-size: 11px; }
+    td { border: 1px solid #000; padding: 8px 5px; }
 
     /* Footer Totals */
     .totals-section { display: flex; justify-content: flex-end; margin-bottom: 30px; }
-    .totals-table { width: 250px; text-align: right; font-size: 10px; }
-    .total-row { display: flex; justify-content: space-between; padding: 2px 0; }
+    .totals-table { width: 300px; text-align: right; font-size: 14px; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; }
     .total-final { 
         font-weight: 900; 
-        font-size: 14px; 
+        font-size: 18px; 
         border-top: 2px solid #000; 
         border-bottom: 2px solid #000; 
-        padding: 5px 0; 
+        padding: 8px 0; 
         margin-top: 5px; 
     }
 
     /* Signatures */
-    .signatures { display: flex; justify-content: space-between; margin-bottom: 0px; text-align: center; font-size: 10px; }
+    .signatures { display: flex; justify-content: space-between; margin-bottom: 20px; text-align: center; font-size: 14px; }
     .sig-block { width: 22%; }
-    .sig-line { border-bottom: 1px solid #000; height: 30px; margin-bottom: 5px; }
+    .sig-line { border-bottom: 1px solid #000; height: 50px; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center; }
 
     /* Bottom Footer */
     .page-footer { 
@@ -113,50 +133,49 @@ export function hidrotermTemplate(data: InvoiceData): string {
         justify-content: space-between; 
         border-top: 1px solid #000; 
         padding-top: 10px;
-        font-size: 9px;
+        font-size: 12px;
+        margin-top: 20px;
     }
     .footer-col { flex: 1; }
     
-    /* Footer Layout */
+    /* Footer Container - no absolute positioning */
     .footer-container {
-        position: absolute;
-        bottom: 30mm;
-        left: 0;
-        right: 0;
-        padding: 0 10mm;
+        margin-top: auto;
+        padding-top: 20px;
     }
   </style>
 </head>
 <body>
 
+  <div class="main-content">
       <!-- 1. Top Bar (Logo Left, QR Right) -->
       <div class="top-bar">
         <div class="brand-section">
             <div class="brand-name">${data.company.name || 'EMRI I BIZNESIT'}</div>
-            <div class="invoice-header-line">FATURA: ${data.details.number}</div>
+            <div class="invoice-header-line">${documentLabel.toUpperCase()}: ${data.details.number}</div>
         </div>
         <div class="qr-section">
             <img src="${qrCodeUrl}" style="height: 80px; width: 80px;" />
         </div>
       </div>
 
-      <!-- 2. Address Columns -->
+      <!-- 2. Client Info (Single Section) -->
       <div class="info-section">
-        <div class="info-col">
+        <div class="info-col" style="width: 100%;">
           <div class="info-title">Fatura Për:</div>
-          <div class="value" style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${data.client.name}</div>
-          <div class="info-row"><span class="label">Nr. unik/fiskal:</span><span class="value">${data.client.taxId || '-'}</span></div>
-          <div class="info-row"><span class="label">Kontakti:</span><span class="value">${data.client.email || '-'}</span></div>
-          <div class="info-row"><span class="label">Adresa:</span><span class="value">${data.client.address || '-'}</span></div>
-        </div>
-        
-        <div class="info-col">
-          <div class="info-title">Malli Për (Delivery):</div>
-          <div class="value" style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${data.client.deliveryName || data.client.name}</div>
-          <div class="info-row"><span class="label">Nr. unik/fiskal:</span><span class="value">${data.client.taxId || '-'}</span></div>
-          <div class="info-row"><span class="label">Kontakti:</span><span class="value">${data.client.email || '-'}</span></div>
-          <div class="info-row"><span class="label">Adresa:</span><span class="value">${data.client.deliveryAddress || data.client.address || '-'}</span></div>
-          <div class="info-row"><span class="label">Tel:</span><span class="value">${data.client.phone || '-'}</span></div>
+          <div class="value" style="font-weight: bold; font-size: 14px; margin-bottom: 6px;">${data.client.name}</div>
+          <div style="display: flex; gap: 40px;">
+            <div style="flex: 1;">
+              <div class="info-row"><span class="label">NUI:</span><span class="value">${data.client.nui || data.client.taxId || '-'}</span></div>
+              <div class="info-row"><span class="label">Nr. Fiskal:</span><span class="value">${data.client.fiscalNumber || '-'}</span></div>
+              <div class="info-row"><span class="label">Nr. TVSH:</span><span class="value">${data.client.vatNumber || '-'}</span></div>
+              <div class="info-row"><span class="label">Adresa:</span><span class="value">${data.client.address || '-'}</span></div>
+            </div>
+            <div style="flex: 1;">
+              <div class="info-row"><span class="label">Kontakti:</span><span class="value">${data.client.email || '-'}</span></div>
+              <div class="info-row"><span class="label">Tel:</span><span class="value">${data.client.phone || '-'}</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -164,11 +183,11 @@ export function hidrotermTemplate(data: InvoiceData): string {
       <div class="meta-grid">
          <div class="meta-item">
           <span class="meta-label">Data e faturës:</span>
-          ${data.details.issueDate}
+          ${formatDate(data.details.issueDate)}
         </div>
         <div class="meta-item">
           <span class="meta-label">Afati për pagesë:</span>
-          ${data.details.dueDate}
+          ${formatDate(data.details.dueDate)}
         </div>
       </div>
 
@@ -237,6 +256,7 @@ export function hidrotermTemplate(data: InvoiceData): string {
           </div>
         </div>
       </div>
+  </div> <!-- end main-content -->
 
   <!-- Footer Container (Signatures + Footer) -->
   <div class="footer-container">
@@ -244,7 +264,9 @@ export function hidrotermTemplate(data: InvoiceData): string {
       <div class="signatures">
         <div class="sig-block">
           <div class="sig-title">Faturoi:</div>
-          <div class="sig-line"></div>
+          <div class="sig-line">
+            ${data.company.signatureUrl ? `<img src="${data.company.signatureUrl}" style="max-height: 45px; max-width: 100%; object-fit: contain;" />` : ''}
+          </div>
         </div>
         <div class="sig-block">
           <div class="sig-title">Dërgoi:</div>
@@ -256,7 +278,9 @@ export function hidrotermTemplate(data: InvoiceData): string {
         </div>
         <div class="sig-block">
           <div class="sig-title">Pranoi:</div>
-          <div class="sig-line"></div>
+          <div class="sig-line">
+            ${data.details.buyerSignatureUrl ? `<img src="${data.details.buyerSignatureUrl}" style="max-height: 45px; max-width: 100%; object-fit: contain;" />` : ''}
+          </div>
           <div>Emri i plotë</div>
         </div>
       </div>
