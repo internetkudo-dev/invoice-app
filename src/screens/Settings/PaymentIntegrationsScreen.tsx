@@ -17,6 +17,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, QuickAddModal } from '../../components/common';
 import { t } from '../../i18n';
 import { formatCurrency } from '../../utils/format';
+import { stripeService } from '../../services/stripeService';
 
 // Stripe logo SVG path
 const StripeLogo = ({ color, size }: { color: string; size: number }) => (
@@ -83,22 +84,83 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleConnect = async (provider: 'stripe' | 'paypal') => {
-        setShowConnectModal(provider);
+        if (provider === 'stripe') {
+            // Show options: OAuth or Developer Mode (API key)
+            if (!user) return;
+
+            Alert.alert(
+                'Connect Stripe',
+                'Choose how to connect your Stripe account:',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'OAuth (Recommended)',
+                        onPress: async () => {
+                            try {
+                                const result = await stripeService.initiateOAuth(user.id);
+
+                                if (result.success) {
+                                    const status = await stripeService.checkConnectionStatus(user.id);
+                                    setConnections(prev => prev.map(conn =>
+                                        conn.provider === 'stripe'
+                                            ? { ...conn, connected: true, account_id: status.accountId }
+                                            : conn
+                                    ));
+                                    Alert.alert('Success', 'Stripe account connected successfully!');
+                                } else {
+                                    Alert.alert('Connection Failed', result.error || 'Could not connect to Stripe');
+                                }
+                            } catch (error: any) {
+                                Alert.alert('Error', error.message);
+                            }
+                        }
+                    },
+                    {
+                        text: 'Developer Mode',
+                        onPress: () => {
+                            // Show API key input modal
+                            setShowConnectModal('stripe');
+                        }
+                    }
+                ]
+            );
+        } else {
+            // PayPal uses link input
+            setShowConnectModal(provider);
+        }
     };
 
     const handleSaveLink = async (formData: any) => {
         if (!user || !showConnectModal) return;
-        const link = formData.link;
-        const field = `payment_link_${showConnectModal}`;
 
         try {
-            const { error } = await supabase.from('profiles').update({ [field]: link }).eq('id', user.id);
-            if (error) throw error;
+            if (showConnectModal === 'stripe') {
+                // Developer Mode: Connect with API key
+                const apiKey = formData.link;
+                const result = await stripeService.connectWithApiKey(user.id, apiKey);
 
-            setConnections(prev => prev.map(conn =>
-                conn.provider === showConnectModal ? { ...conn, connected: true, account_email: link } : conn
-            ));
-            Alert.alert('Success', `${showConnectModal.charAt(0).toUpperCase() + showConnectModal.slice(1)} link saved`);
+                if (!result.success) {
+                    Alert.alert('Invalid API Key', result.error || 'Could not validate the API key.');
+                    return;
+                }
+
+                setConnections(prev => prev.map(conn =>
+                    conn.provider === 'stripe'
+                        ? { ...conn, connected: true, account_id: result.accountId }
+                        : conn
+                ));
+                Alert.alert('Success', 'Stripe connected via Developer Mode!');
+            } else {
+                // PayPal - just save link
+                const link = formData.link;
+                const { error } = await supabase.from('profiles').update({ payment_link_paypal: link }).eq('id', user.id);
+                if (error) throw error;
+
+                setConnections(prev => prev.map(conn =>
+                    conn.provider === 'paypal' ? { ...conn, connected: true, account_email: link } : conn
+                ));
+                Alert.alert('Success', 'PayPal link saved');
+            }
         } catch (error: any) {
             Alert.alert('Error', error.message);
         } finally {
@@ -137,26 +199,54 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
     };
 
     const handleSync = async (provider: 'stripe' | 'paypal') => {
+        if (provider !== 'stripe') {
+            Alert.alert('Not Available', 'PayPal sync is not yet available.');
+            return;
+        }
+
+        // Check if Stripe is connected
+        const status = await stripeService.checkConnectionStatus(user!.id);
+        if (!status.connected) {
+            Alert.alert('Not Connected', 'Please connect your Stripe account first.');
+            return;
+        }
+
         setSyncing(provider);
 
         try {
-            // In production, this would call a Supabase Edge Function that:
-            // 1. Fetches transactions from Stripe/PayPal API
-            // 2. Creates corresponding expense/income records
-            // 3. Updates the last_synced timestamp
+            let result;
 
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+            if (status.method === 'apikey') {
+                // Developer Mode: Use direct API sync
+                const { data: profileData } = await supabase
+                    .from('profiles')
+                    .select('stripe_api_key, active_company_id, company_id')
+                    .eq('id', user!.id)
+                    .single();
 
-            // Update last synced time
+                if (!profileData?.stripe_api_key) {
+                    throw new Error('API key not found');
+                }
+
+                const companyId = profileData.active_company_id || profileData.company_id;
+                result = await stripeService.syncDirectWithApiKey(user!.id, profileData.stripe_api_key, companyId);
+            } else {
+                // OAuth: Use Edge Function
+                result = await stripeService.syncViaEdgeFunction();
+            }
+
             setConnections(prev => prev.map(conn =>
                 conn.provider === provider
-                    ? { ...conn, last_synced: new Date().toISOString() }
+                    ? { ...conn, last_synced: new Date().toISOString(), total_synced: conn.total_synced + result.transactionsCount }
                     : conn
             ));
 
-            Alert.alert('Sync Complete', `Successfully synced ${provider} transactions`);
-        } catch (error) {
-            Alert.alert('Sync Failed', 'Could not sync transactions. Please try again.');
+            Alert.alert(
+                'Sync Complete',
+                `Synced ${result.transactionsCount} transactions and ${result.payoutsCount} payouts.\n\nTotal Sales: ${formatCurrency(result.totalSales)}\nTotal Fees: ${formatCurrency(result.totalFees)}`
+            );
+        } catch (error: any) {
+            Alert.alert('Sync Failed', error.message || 'Could not sync transactions. Please try again.');
         } finally {
             setSyncing(null);
         }
@@ -291,6 +381,16 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                             >
                                 <X color="#ef4444" size={18} />
                             </TouchableOpacity>
+
+                            {/* View Dashboard Button for Stripe */}
+                            {connection.provider === 'stripe' && (
+                                <TouchableOpacity
+                                    style={[styles.viewDashboardButton, { backgroundColor: '#635bff20', borderColor: '#635bff' }]}
+                                    onPress={() => navigation.navigate('StripeDashboard')}
+                                >
+                                    <CreditCard color="#635bff" size={18} />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </>
                 ) : (
@@ -380,9 +480,9 @@ export function PaymentIntegrationsScreen({ navigation }: any) {
                 fields={[
                     {
                         key: 'link',
-                        label: `${showConnectModal?.toUpperCase()} Payment Link`,
-                        placeholder: showConnectModal === 'stripe' ? 'https://buy.stripe.com/...' : 'https://paypal.me/...',
-                        keyboardType: 'url'
+                        label: showConnectModal === 'stripe' ? 'Stripe Secret API Key' : 'PayPal Payment Link',
+                        placeholder: showConnectModal === 'stripe' ? 'sk_live_... or sk_test_...' : 'https://paypal.me/...',
+                        keyboardType: showConnectModal === 'stripe' ? 'default' : 'url'
                     }
                 ]}
             />
@@ -475,6 +575,14 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 12,
         borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    viewDashboardButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 12,
+        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },

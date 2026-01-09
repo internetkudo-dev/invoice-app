@@ -37,6 +37,13 @@ export interface Profile {
     smtp_pass?: string;
     smtp_secure?: boolean;
     smtp_from_email?: string; // Optional: custom FROM address if different than user email
+    // Stripe Connect OAuth fields
+    stripe_access_token?: string;
+    stripe_refresh_token?: string;
+    stripe_account_id?: string;
+    stripe_connected_at?: string;
+    stripe_livemode?: boolean;
+    stripe_last_synced?: string;
     updated_at: string;
 }
 

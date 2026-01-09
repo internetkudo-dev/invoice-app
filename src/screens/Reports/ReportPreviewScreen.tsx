@@ -73,9 +73,16 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                     .eq('type', 'invoice')
                     .order('issue_date', { ascending: false });
 
+                const { data: bills } = await supabase
+                    .from('supplier_bills')
+                    .select('*, vendor:vendors(name, tax_id)')
+                    .or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
+                    .gte('issue_date', start);
+
                 const totalSales = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
                 const paidTotal = invoices?.filter(i => i.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount), 0) || 0;
                 const taxTotal = invoices?.reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0) || 0;
+                const taxDeductible = bills?.reduce((sum, bill) => sum + Number(bill.tax_amount || 0), 0) || 0;
 
                 const monthName = startOfMonth.toLocaleDateString('sq-AL', { month: 'long', year: 'numeric' });
 
@@ -84,18 +91,30 @@ export function ReportPreviewScreen({ navigation, route }: any) {
                     date: monthName,
                     metrics: [
                         { label: 'Total Sales', value: formatCurrency(totalSales), icon: TrendingUp, color: '#6366f1' },
-                        { label: 'Paid', value: formatCurrency(paidTotal), icon: TrendingUp, color: '#10b981' },
-                        { label: 'Tax (TVSH)', value: formatCurrency(taxTotal), icon: FileText, color: '#f59e0b' },
+                        { label: 'Tax Output', value: formatCurrency(taxTotal), icon: FileText, color: '#f59e0b' },
+                        { label: 'Tax Deductible', value: formatCurrency(taxDeductible), icon: FileText, color: '#10b981' },
                     ],
-                    // Store full invoice object for detailed report
+                    // Store full data for detailed report
                     rawInvoices: invoices || [],
-                    transactions: invoices?.map(inv => ({
-                        id: inv.id,
-                        desc: `${inv.invoice_number} - ${(inv.client as any)?.name || 'Guest'}`,
-                        amount: inv.total_amount,
-                        type: 'sale',
-                        status: inv.status,
-                    })) || [],
+                    rawBills: bills || [],
+                    transactions: [
+                        ...(invoices?.map(inv => ({
+                            id: inv.id,
+                            desc: `${inv.invoice_number} - ${(inv.client as any)?.name || 'Guest'}`,
+                            amount: inv.total_amount,
+                            type: 'sale',
+                            status: inv.status,
+                            date: inv.issue_date,
+                        })) || []),
+                        ...(bills?.map(bill => ({
+                            id: bill.id,
+                            desc: `${bill.bill_number} - ${(bill.vendor as any)?.name || 'Vendor'}`,
+                            amount: bill.total_amount,
+                            type: 'expense',
+                            status: bill.status,
+                            date: bill.issue_date,
+                        })) || [])
+                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
                 });
             }
         } catch (error) {
@@ -209,6 +228,8 @@ export function ReportPreviewScreen({ navigation, route }: any) {
 
     const generateSalesBookHtml = (reportData: any) => {
         const invoices = reportData.rawInvoices || [];
+        const bills = reportData.rawBills || [];
+
         const formatDate = (dateStr: string) => {
             if (!dateStr) return '';
             const date = new Date(dateStr);
@@ -216,42 +237,51 @@ export function ReportPreviewScreen({ navigation, route }: any) {
         };
         const getMonth = (dateStr: string) => new Date(dateStr).getMonth() + 1;
 
+        // Combine and sort
+        const allDocs = [
+            ...invoices.map((i: any) => ({ ...i, docType: 'sale' })),
+            ...bills.map((b: any) => ({ ...b, docType: 'purchase' }))
+        ].sort((a, b) => new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime());
+
         // Calculate columns totals
         let totalNet = 0;
         let totalVat = 0;
+        let totalVatDeductible = 0;
         let totalGross = 0;
 
-        const rows = invoices.map((inv: any, index: number) => {
-            const net = inv.total_amount - inv.tax_amount;
-            const vat = inv.tax_amount;
-            const gross = inv.total_amount;
+        const rows = allDocs.map((doc: any, index: number) => {
+            const isSale = doc.docType === 'sale';
+            const net = isSale ? (doc.total_amount - doc.tax_amount) : 0;
+            const vat = isSale ? doc.tax_amount : 0;
+            const vatDeductible = !isSale ? doc.tax_amount : 0;
+            const gross = doc.total_amount;
 
             totalNet += net;
-            totalVat += vat;
-            totalGross += gross;
+            if (isSale) totalVat += vat;
+            else totalVatDeductible += vatDeductible;
+            totalGross += isSale ? gross : 0; // Usually Gross in Libri i Shitjes is for sales
 
-            const client = inv.client || {};
+            const subject = isSale ? (doc.client || {}) : (doc.vendor || {});
+            const docNum = isSale ? doc.invoice_number : doc.bill_number;
+            const subjectId = isSale ? (subject.nui || subject.tax_id) : (subject.tax_id);
 
             return `
                 <tr>
-                    <td>${inv.invoice_number}</td>
+                    <td>${docNum}</td>
                     <td>${index + 1}</td>
-                    <td>${formatDate(inv.issue_date)}</td>
-                    <td>${getMonth(inv.issue_date)}</td>
-                    <td>SHITJE</td>
-                    <td>${inv.id.slice(0, 6).toUpperCase()}</td>
-                    <td></td>
-                    <td style="text-align: left;">${client.name || '-'}</td>
-                    <td>${client.nui || client.tax_id || '-'}</td>
-                    <td>${client.fiscal_number || '-'}</td>
-                    <td>${client.vat_number || '-'}</td>
-                    <td class="num">${formatCurrency(net).replace('$', '').replace('€', '')}</td>
-                    <td class="num">${formatCurrency(net).replace('$', '').replace('€', '')}</td>
-                    <td class="num">${formatCurrency(vat).replace('$', '').replace('€', '')}</td>
-                    <td class="num">${formatCurrency(vat).replace('$', '').replace('€', '')}</td>
-                    <td class="num">${formatCurrency(vat).replace('$', '').replace('€', '')}</td>
-                    <td class="num bold">${formatCurrency(gross).replace('$', '').replace('€', '')}</td>
-                    <td class="num">${formatCurrency(inv.amount_received || 0).replace('$', '').replace('€', '')}</td>
+                    <td>${formatDate(doc.issue_date)}</td>
+                    <td>${getMonth(doc.issue_date)}</td>
+                    <td style="text-align: left;">${subject.name || '-'}</td>
+                    <td>${isSale ? (subject.nui || subject.tax_id || '-') : '-'}</td>
+                    <td>${isSale ? (subject.fiscal_number || '-') : (subject.tax_id || '-')}</td>
+                    <td>${isSale ? (subject.vat_number || '-') : '-'}</td>
+                    <td class="num">${isSale ? formatCurrency(net).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num">${isSale ? formatCurrency(net).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num">${isSale ? formatCurrency(vat).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num">${isSale ? formatCurrency(vat).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num">${!isSale ? formatCurrency(vatDeductible).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num bold">${isSale ? formatCurrency(gross).replace('$', '').replace('€', '') : '-'}</td>
+                    <td class="num">${isSale ? formatCurrency(doc.amount_received || 0).replace('$', '').replace('€', '') : '-'}</td>
                 </tr>
             `;
         }).join('');
@@ -300,13 +330,10 @@ export function ReportPreviewScreen({ navigation, route }: any) {
     col:nth-child(2) { width: 30px; } /* Nr */
     col:nth-child(3) { width: 55px; } /* Data */
     col:nth-child(4) { width: 30px; } /* Muaj */
-    col:nth-child(5) { width: 50px; } /* Njesia */
-    col:nth-child(6) { width: 50px; } /* Nr Dok */
-    col:nth-child(7) { width: 30px; } /* Ref */
-    col:nth-child(8) { width: 140px; } /* Subjekti (Wider) */
-    col:nth-child(9) { width: 55px; } /* NUI */
-    col:nth-child(10) { width: 55px; } /* Fiskal */
-    col:nth-child(11) { width: 55px; } /* TVSH */
+    col:nth-child(5) { width: 140px; } /* Subjekti (Wider) */
+    col:nth-child(6) { width: 55px; } /* NUI */
+    col:nth-child(7) { width: 55px; } /* Fiskal */
+    col:nth-child(8) { width: 55px; } /* TVSH */
     /* Money cols share remaining space */
   </style>
 </head>
@@ -318,7 +345,7 @@ export function ReportPreviewScreen({ navigation, route }: any) {
 
   <table>
     <colgroup>
-        <col><col><col><col><col><col><col><col><col><col><col>
+        <col><col><col><col><col><col><col><col>
         <col><col><col><col><col><col><col>
     </colgroup>
     <thead>
@@ -327,9 +354,6 @@ export function ReportPreviewScreen({ navigation, route }: any) {
         <th>Nr</th>
         <th>Data</th>
         <th>Muaj</th>
-        <th>Njësia Org.</th>
-        <th>Nr. i dok.</th>
-        <th>Ref.</th>
         <th>Subjekti</th>
         <th>NUI</th>
         <th>Nr. Fiskal</th>
@@ -346,12 +370,12 @@ export function ReportPreviewScreen({ navigation, route }: any) {
     <tbody>
       ${rows}
       <tr class="total-row">
-        <td colspan="11" style="text-align: right; padding-right: 10px;">TOTAL:</td>
+        <td colspan="8" style="text-align: right; padding-right: 10px;">TOTAL:</td>
         <td class="num">${formatCurrency(totalNet).replace('$', '').replace('€', '')}</td>
         <td class="num">${formatCurrency(totalNet).replace('$', '').replace('€', '')}</td>
         <td class="num">${formatCurrency(totalVat).replace('$', '').replace('€', '')}</td>
         <td class="num">${formatCurrency(totalVat).replace('$', '').replace('€', '')}</td>
-        <td class="num">${formatCurrency(totalVat).replace('$', '').replace('€', '')}</td>
+        <td class="num">${formatCurrency(totalVatDeductible).replace('$', '').replace('€', '')}</td>
         <td class="num">${formatCurrency(totalGross).replace('$', '').replace('€', '')}</td>
         <td class="num"></td>
       </tr>

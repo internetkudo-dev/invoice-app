@@ -351,7 +351,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
                         <ArrowLeft color={textColor} size={24} />
                     </TouchableOpacity>
                     <View>
@@ -543,14 +543,20 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                     />
 
                     <View style={styles.secondaryActions}>
-                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: cardBg }]} onPress={handleShare}>
-                            <Share2 color="#10b981" size={22} />
-                            <Text style={[styles.actionText, { color: '#10b981' }]}>Share PDF</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: cardBg }]} onPress={handleGeneratePdf}>
-                            <FileText color="#818cf8" size={22} />
-                            <Text style={[styles.actionText, { color: '#818cf8' }]}>Export</Text>
-                        </TouchableOpacity>
+                        <Button
+                            title="Share PDF"
+                            onPress={handleShare}
+                            icon={Share2}
+                            variant="outline"
+                            style={{ flex: 1 }}
+                        />
+                        <Button
+                            title="Export"
+                            onPress={handleGeneratePdf}
+                            icon={FileText}
+                            variant="outline"
+                            style={{ flex: 1 }}
+                        />
                     </View>
 
                     {/* Online Payment Actions */}
@@ -559,22 +565,22 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                             <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 12 }]}>Online Payment</Text>
                             <View style={styles.row}>
                                 {profile?.payment_link_stripe && (
-                                    <TouchableOpacity
-                                        style={[styles.actionButton, { backgroundColor: '#635bff', borderColor: '#635bff' }]}
+                                    <Button
+                                        title="Stripe"
                                         onPress={() => profile.payment_link_stripe && Linking.openURL(profile.payment_link_stripe)}
-                                    >
-                                        <Zap color="#fff" size={20} />
-                                        <Text style={[styles.actionText, { color: '#fff' }]}>Stripe</Text>
-                                    </TouchableOpacity>
+                                        icon={Zap}
+                                        style={{ flex: 1, backgroundColor: '#635bff', borderColor: '#635bff' }}
+                                        textStyle={{ color: '#fff' }}
+                                    />
                                 )}
                                 {profile?.payment_link_paypal && (
-                                    <TouchableOpacity
-                                        style={[styles.actionButton, { backgroundColor: '#0070ba', borderColor: '#0070ba' }]}
+                                    <Button
+                                        title="PayPal"
                                         onPress={() => profile.payment_link_paypal && Linking.openURL(profile.payment_link_paypal)}
-                                    >
-                                        <CreditCard color="#fff" size={20} />
-                                        <Text style={[styles.actionText, { color: '#fff' }]}>PayPal</Text>
-                                    </TouchableOpacity>
+                                        icon={CreditCard}
+                                        style={{ flex: 1, backgroundColor: '#0070ba', borderColor: '#0070ba' }}
+                                        textStyle={{ color: '#fff' }}
+                                    />
                                 )}
                             </View>
                         </View>
@@ -588,16 +594,16 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 const styles = StyleSheet.create({
     container: { flex: 1 },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
-    backButton: { marginRight: 16, padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold' },
-    subtitle: { fontSize: 14, marginTop: 2 },
-    editButton: { padding: 10, borderRadius: 10 },
-    actionBtn: { padding: 10, borderRadius: 10 },
+    backButton: { marginRight: 16, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    title: { fontSize: 24, fontWeight: 'bold' },
+    subtitle: { fontSize: 13, marginTop: 2 },
+    editButton: { padding: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    actionBtn: { padding: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     headerRight: { flexDirection: 'row', alignItems: 'center' },
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 40 },
+    scrollContent: { padding: 20, paddingBottom: 40 },
     statusCard: { marginBottom: 20 },
     statusCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     totalAmount: { fontSize: 28, fontWeight: 'bold' },

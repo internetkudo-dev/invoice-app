@@ -9,13 +9,14 @@ import {
     Dimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Briefcase, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Users, Package, FileText, BarChart2, QrCode, AlertTriangle, Calendar, Clock, Receipt, ScanLine, User, Settings, ChevronRight } from 'lucide-react-native';
+import { Briefcase, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Users, Package, FileText, BarChart2, QrCode, AlertTriangle, Calendar, Clock, Receipt, ScanLine, User, Settings, ChevronRight, ShoppingCart, CreditCard } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, StatusBadge, Button, FAB } from '../../components/common';
 import { Invoice, Profile, Client, Expense } from '../../types';
 import { formatCurrency } from '../../utils/format';
+import { stripeService } from '../../services/stripeService';
 import { t } from '../../i18n';
 
 const { width } = Dimensions.get('window');
@@ -48,6 +49,14 @@ export function DashboardScreen({ navigation }: any) {
         clientCount: 0,
         productCount: 0,
         growth: 0,
+    });
+
+    const [stripeSummary, setStripeSummary] = useState({
+        totalSales: 0,
+        totalNet: 0,
+        totalPayouts: 0,
+        pendingPayouts: 0,
+        isConnected: false
     });
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
@@ -94,6 +103,21 @@ export function DashboardScreen({ navigation }: any) {
             if (allProducts) {
                 const lowStock = allProducts.filter(p => (p as any).track_stock && ((p as any).stock_quantity || 0) <= ((p as any).low_stock_threshold || 5));
                 setLowStockProducts(lowStock);
+            }
+
+            // Fetch Stripe summary
+            const stripeStatus = await stripeService.checkConnectionStatus(user.id);
+            if (stripeStatus.connected) {
+                const summary = await stripeService.getDashboardSummary(user.id, companyId);
+                setStripeSummary({
+                    totalSales: summary.totalSales,
+                    totalNet: summary.totalNet,
+                    totalPayouts: summary.totalPayouts,
+                    pendingPayouts: summary.pendingPayouts,
+                    isConnected: true
+                });
+            } else {
+                setStripeSummary(prev => ({ ...prev, isConnected: false }));
             }
 
             if (invoicesData && expensesData) {
@@ -201,14 +225,7 @@ export function DashboardScreen({ navigation }: any) {
                     <Text style={[styles.welcome, { color: mutedColor }]}>{t('welcomeBack', language)},</Text>
                     <Text style={[styles.companyName, { color: textColor }]}>{profile?.company_name || 'My Business'}</Text>
                 </View>
-                <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={[styles.profileButton, { backgroundColor: cardBg, marginRight: 8 }]}>
-                        <Briefcase color={primaryColor} size={20} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={[styles.profileButton, { backgroundColor: cardBg }]}>
-                        <User color={primaryColor} size={20} />
-                    </TouchableOpacity>
-                </View>
+                {/* Actions removed from top right as they are now shortcuts below */}
             </View>
 
             <ScrollView
@@ -224,13 +241,13 @@ export function DashboardScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                <View style={styles.dailyReportsGrid}>
+                <View style={[styles.dailyReportsGrid, { gap: 12 }]}>
                     <Card style={[styles.dailyCard, { borderLeftColor: primaryColor, borderLeftWidth: 4 }]}>
                         <View style={styles.dailyCardContent}>
                             <View style={[styles.dailyIconContainer, { backgroundColor: `${primaryColor}15` }]}>
-                                <TrendingUp color={primaryColor} size={22} />
+                                <TrendingUp color={primaryColor} size={24} />
                             </View>
-                            <View style={styles.dailyCardInfo}>
+                            <View>
                                 <Text style={[styles.dailyCardLabel, { color: mutedColor }]}>{t('todayRevenue', language)}</Text>
                                 <Text style={[styles.dailyCardValue, { color: textColor }]}>{formatCurrency(todayStats.revenue)}</Text>
                             </View>
@@ -240,9 +257,9 @@ export function DashboardScreen({ navigation }: any) {
                     <Card style={[styles.dailyCard, { borderLeftColor: '#10b981', borderLeftWidth: 4 }]}>
                         <View style={styles.dailyCardContent}>
                             <View style={[styles.dailyIconContainer, { backgroundColor: '#10b98115' }]}>
-                                <Receipt color="#10b981" size={22} />
+                                <Receipt color="#10b981" size={24} />
                             </View>
-                            <View style={styles.dailyCardInfo}>
+                            <View>
                                 <Text style={[styles.dailyCardLabel, { color: mutedColor }]}>{t('todayInvoices', language)}</Text>
                                 <Text style={[styles.dailyCardValue, { color: textColor }]}>{todayStats.invoiceCount}</Text>
                             </View>
@@ -256,6 +273,38 @@ export function DashboardScreen({ navigation }: any) {
                     <StatusItem label={t('pending', language)} value={formatCurrency(stats.pending)} color="#f59e0b" bgColor="#f59e0b20" />
                     <StatusItem label={t('overdue', language)} value={formatCurrency(stats.overdue)} color="#ef4444" bgColor="#ef444420" />
                 </View>
+
+                {/* Stripe HUD */}
+                {stripeSummary.isConnected && (
+                    <View style={{ marginTop: 8 }}>
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Settings', { screen: 'StripeDashboard' })}
+                            activeOpacity={0.7}
+                        >
+                            <Card style={[styles.stripeHudCard, { backgroundColor: '#6366f1' }]}>
+                                <View style={styles.stripeHudHeader}>
+                                    <View style={styles.stripeHudTitleRow}>
+                                        <CreditCard color="#fff" size={18} />
+                                        <Text style={styles.stripeHudTitle}>Stripe Net Volume</Text>
+                                    </View>
+                                    <ChevronRight color="rgba(255,255,255,0.7)" size={20} />
+                                </View>
+                                <Text style={styles.stripeHudValue}>{formatCurrency(stripeSummary.totalNet)}</Text>
+                                <View style={styles.stripeHudStats}>
+                                    <View style={styles.stripeHudStatItem}>
+                                        <Text style={styles.stripeHudStatLabel}>Payouts</Text>
+                                        <Text style={styles.stripeHudStatValue}>{formatCurrency(stripeSummary.totalPayouts)}</Text>
+                                    </View>
+                                    <View style={styles.stripeHudStatDivider} />
+                                    <View style={styles.stripeHudStatItem}>
+                                        <Text style={styles.stripeHudStatLabel}>Pending</Text>
+                                        <Text style={styles.stripeHudStatValue}>{formatCurrency(stripeSummary.pendingPayouts)}</Text>
+                                    </View>
+                                </View>
+                            </Card>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* Section 2: Performance Chart */}
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
@@ -318,7 +367,7 @@ export function DashboardScreen({ navigation }: any) {
                     {invoices.length === 0 && <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noInvoices', language)}</Text>}
                 </Card>
 
-                {/* Section 5: Profile & Settings */}
+                {/* Section 5: Profile & Settings Shortcuts */}
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
                     <View style={styles.sectionTitleRow}>
                         <User color={primaryColor} size={20} />
@@ -326,39 +375,37 @@ export function DashboardScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                <View style={styles.profileGrid}>
-                    <TouchableOpacity
-                        activeOpacity={0.8}
+                <View style={{ gap: 12, marginBottom: 24 }}>
+                    <Button
+                        title={t('profileDashboard', language)}
+                        variant="shortcut"
+                        icon={User}
                         onPress={() => navigation.navigate('Profile')}
-                        style={{ flex: 1 }}
-                    >
-                        <Card style={[styles.profileCard, { borderLeftColor: '#8b5cf6', borderLeftWidth: 4 }]}>
-                            <View style={styles.profileCardContent}>
-                                <View style={[styles.profileIconContainer, { backgroundColor: '#8b5cf615' }]}>
-                                    <User color="#8b5cf6" size={22} />
-                                </View>
-                                <Text style={[styles.profileCardTitle, { color: textColor }]}>{t('profileDashboard', language)}</Text>
-                                <ChevronRight color={mutedColor} size={18} />
-                            </View>
-                        </Card>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        activeOpacity={0.8}
+                    />
+                    <Button
+                        title={t('appSettings', language)}
+                        variant="shortcut"
+                        icon={Settings}
                         onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })}
-                        style={{ flex: 1 }}
-                    >
-                        <Card style={[styles.profileCard, { borderLeftColor: '#6366f1', borderLeftWidth: 4 }]}>
-                            <View style={styles.profileCardContent}>
-                                <View style={[styles.profileIconContainer, { backgroundColor: '#6366f115' }]}>
-                                    <Settings color="#6366f1" size={22} />
-                                </View>
-                                <Text style={[styles.profileCardTitle, { color: textColor }]}>{t('appSettings', language)}</Text>
-                                <ChevronRight color={mutedColor} size={18} />
-                            </View>
-                        </Card>
-                    </TouchableOpacity>
+                    />
+                    {stripeSummary.isConnected && (
+                        <Button
+                            title="Stripe Dashboard"
+                            variant="shortcut"
+                            icon={CreditCard}
+                            onPress={() => navigation.navigate('Settings', { screen: 'StripeDashboard' })}
+                        />
+                    )}
                 </View>
+
+                {/* Online Sales Section */}
+                <View style={[styles.sectionHeader, { marginTop: 8 }]}>
+                    <View style={styles.sectionTitleRow}>
+                        <ShoppingCart color={primaryColor} size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Online Sales</Text>
+                    </View>
+                </View>
+
 
                 {/* Low Stock Alerts */}
                 {lowStockProducts.length > 0 && (
@@ -402,9 +449,8 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    welcome: { fontSize: 14, fontWeight: '500' },
-    companyName: { fontSize: 24, fontWeight: 'bold' },
-    profileButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    welcome: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
+    companyName: { fontSize: 28, fontWeight: 'bold' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 100 },
 
@@ -471,4 +517,73 @@ const styles = StyleSheet.create({
     profileCardContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     profileIconContainer: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     profileCardTitle: { flex: 1, fontSize: 13, fontWeight: '600' },
+
+    // Stripe HUD
+    stripeHudCard: {
+        padding: 20,
+        borderRadius: 18,
+        marginBottom: 16,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+    },
+    stripeHudHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    stripeHudTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    stripeHudTitle: {
+        color: '#fff',
+        fontSize: 14,
+        fontWeight: '600',
+        opacity: 0.9,
+    },
+    stripeHudValue: {
+        color: '#fff',
+        fontSize: 32,
+        fontWeight: '800',
+        marginBottom: 16,
+    },
+    stripeHudStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.2)',
+        paddingTop: 16,
+    },
+    stripeHudStatItem: {
+        flex: 1,
+    },
+    stripeHudStatLabel: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 12,
+        marginBottom: 4,
+    },
+    stripeHudStatValue: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    stripeHudStatDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        marginHorizontal: 20,
+    },
+
+    // Online Sales section
+    onlineSalesCard: { padding: 16, borderRadius: 14, marginBottom: 16 },
+    onlineSalesContent: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    onlineSalesIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    onlineSalesInfo: { flex: 1 },
+    onlineSalesTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+    onlineSalesDesc: { fontSize: 13 },
 });

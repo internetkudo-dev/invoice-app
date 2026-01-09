@@ -274,6 +274,8 @@ import { ContractTemplatesScreen } from '../screens/Settings/Contracts/ContractT
 import { ContractTemplateEditorScreen } from '../screens/Settings/Contracts/ContractTemplateEditorScreen';
 import { InvoiceTemplateSettingsScreen } from '../screens/Settings/Templates/InvoiceTemplateSettingsScreen';
 import { PaymentIntegrationsScreen } from '../screens/Settings/PaymentIntegrationsScreen';
+import { StripeDashboardScreen } from '../screens/Settings/StripeDashboardScreen';
+import { AdvancedSettingsScreen } from '../screens/Settings/AdvancedSettingsScreen';
 
 function SettingsStack() {
     return (
@@ -284,7 +286,9 @@ function SettingsStack() {
             <Stack.Screen name="ContractTemplateEditor" component={ContractTemplateEditorScreen} />
             <Stack.Screen name="InvoiceTemplateSettings" component={InvoiceTemplateSettingsScreen} />
             <Stack.Screen name="PaymentIntegrations" component={PaymentIntegrationsScreen} />
+            <Stack.Screen name="StripeDashboard" component={StripeDashboardScreen} />
             <Stack.Screen name="ManageCompanies" component={ManageCompaniesScreen} />
+            <Stack.Screen name="AdvancedSettings" component={AdvancedSettingsScreen} />
         </Stack.Navigator>
     );
 }

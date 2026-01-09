@@ -10,7 +10,7 @@ import {
     TextInput,
     FlatList,
 } from 'react-native';
-import { ArrowLeft, Download, Building, FileText, CreditCard, TrendingUp, Search } from 'lucide-react-native';
+import { ArrowLeft, Download, Building, FileText, CreditCard, TrendingUp, Search, X } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -101,16 +101,6 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         setLoading(true);
 
         try {
-            // For vendors, purchases are "Credit" (we owe money) and payments are "Debit" (we reduces what we owe)
-            // But usually in a ledger, the perspective is:
-            // Purchase/Invoice = Liability Increase (Credit)
-            // Payment = Liability Decrease (Debit)
-            // Result: Debit - Credit = Net 
-
-            // However, to keep it consistent with Customer Ledger UX:
-            // Let's use: Purchases = Debit (Increase Balance/Debt), Payments = Credit (Decrease Balance/Debt)
-            // This way "Balance" means "What we owe the vendor"
-
             const { data: payments } = await supabase
                 .from('vendor_payments')
                 .select('*')
@@ -307,20 +297,16 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     if (!selectedVendorId) {
         return (
             <View style={[styles.container, { backgroundColor: bgColor }]}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <View style={[styles.mainHeader, { borderBottomColor: borderColor }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
                         <ArrowLeft color={textColor} size={24} />
                     </TouchableOpacity>
-                    <Text style={[styles.title, { color: textColor }]}>{t('supplierCard', language) || 'Kartela e Furnitorit'}</Text>
-                    <View style={{ width: 24 }} />
+                    <Text style={[styles.mainTitle, { color: textColor }]}>{t('supplierCard', language) || 'Kartela e Furnitorit'}</Text>
+                    <View style={{ width: 44 }} />
                 </View>
 
                 <View style={styles.content}>
-                    <Text style={[styles.instruction, { color: mutedColor }]}>
-                        Zgjidhni një furnitor për të parë kartelën:
-                    </Text>
-
-                    <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor }]}>
+                    <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
                             style={[styles.searchInput, { color: textColor }]}
@@ -329,6 +315,11 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <X color={mutedColor} size={18} />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {loading ? (
@@ -339,19 +330,22 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                             keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
-                                    style={[styles.clientListItem, { backgroundColor: cardBg, borderColor }]}
+                                    style={[styles.clientListItem, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}
                                     onPress={() => setSelectedVendorId(item.id)}
                                 >
-                                    <View style={[styles.clientIcon, { backgroundColor: `${primaryColor}20` }]}>
-                                        <Building color={primaryColor} size={20} />
+                                    <View style={[styles.clientIcon, { backgroundColor: `${primaryColor}15` }]}>
+                                        <Building color={primaryColor} size={24} />
                                     </View>
                                     <View>
                                         <Text style={[styles.clientNameHeader, { color: textColor }]}>{item.name}</Text>
-                                        {item.email && <Text style={{ color: mutedColor, fontSize: 12 }}>{item.email}</Text>}
+                                        {item.email && <Text style={{ color: mutedColor, fontSize: 13 }}>{item.email}</Text>}
                                     </View>
                                 </TouchableOpacity>
                             )}
-                            contentContainerStyle={{ paddingBottom: 20 }}
+                            contentContainerStyle={{ paddingBottom: 20, gap: 12 }}
+                            ListEmptyComponent={
+                                <Text style={[styles.emptyText, { color: mutedColor }]}>No vendors found</Text>
+                            }
                         />
                     )}
                 </View>
@@ -361,13 +355,20 @@ export function VendorLedgerScreen({ navigation, route }: any) {
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => setSelectedVendorId(null)} style={styles.backButton}>
+            <View style={[styles.mainHeader, { borderBottomColor: borderColor }]}>
+                <TouchableOpacity onPress={() => setSelectedVendorId(null)} style={[styles.backButton, { backgroundColor: cardBg }]}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>{selectedVendor?.name}</Text>
-                <TouchableOpacity onPress={handleExportPDF} disabled={exporting}>
-                    <Download color={exporting ? mutedColor : primaryColor} size={24} />
+                <View style={{ flex: 1, marginHorizontal: 12 }}>
+                    <Text style={[styles.mainTitle, { color: textColor, fontSize: 18 }]} numberOfLines={1}>{selectedVendor?.name}</Text>
+                    <Text style={{ color: mutedColor, fontSize: 12 }}>Vendor Ledger</Text>
+                </View>
+                <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: cardBg }]}
+                    onPress={handleExportPDF}
+                    disabled={exporting}
+                >
+                    <Download color={exporting ? mutedColor : primaryColor} size={20} />
                 </TouchableOpacity>
             </View>
 
@@ -377,46 +378,52 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                 ) : (
                     <>
                         <View style={styles.metricsRow}>
-                            <Card style={[styles.metricCard, { backgroundColor: cardBg }]}>
-                                <FileText color="#ef4444" size={18} />
-                                <Text style={[styles.metricValue, { color: '#ef4444' }]}>{formatCurrency(totals.debit)}</Text>
-                                <Text style={[styles.metricLabel, { color: mutedColor }]}>Debit</Text>
+                            <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
+                                <FileText color="#ef4444" size={20} />
+                                <View>
+                                    <Text style={[styles.metricLabel, { color: mutedColor }]}>DEBIT</Text>
+                                    <Text style={[styles.metricValue, { color: '#ef4444' }]}>{formatCurrency(totals.debit)}</Text>
+                                </View>
                             </Card>
-                            <Card style={[styles.metricCard, { backgroundColor: cardBg }]}>
-                                <CreditCard color="#10b981" size={18} />
-                                <Text style={[styles.metricValue, { color: '#10b981' }]}>{formatCurrency(totals.credit)}</Text>
-                                <Text style={[styles.metricLabel, { color: mutedColor }]}>Credit</Text>
-                            </Card>
-                            <Card style={[styles.metricCard, { backgroundColor: cardBg }]}>
-                                <TrendingUp color={primaryColor} size={18} />
-                                <Text style={[styles.metricValue, { color: primaryColor }]}>{formatCurrency(totals.balance)}</Text>
-                                <Text style={[styles.metricLabel, { color: mutedColor }]}>Gjendja</Text>
+                            <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
+                                <CreditCard color="#10b981" size={20} />
+                                <View>
+                                    <Text style={[styles.metricLabel, { color: mutedColor }]}>CREDIT</Text>
+                                    <Text style={[styles.metricValue, { color: '#10b981' }]}>{formatCurrency(totals.credit)}</Text>
+                                </View>
                             </Card>
                         </View>
+                        <Card style={[styles.metricCard, { backgroundColor: cardBg, borderColor, borderWidth: 1, marginBottom: 20 }]}>
+                            <TrendingUp color={primaryColor} size={24} />
+                            <View>
+                                <Text style={[styles.metricLabel, { color: mutedColor }]}>BALANCE (OWED)</Text>
+                                <Text style={[styles.metricValue, { color: primaryColor, fontSize: 24 }]}>{formatCurrency(totals.balance)}</Text>
+                            </View>
+                        </Card>
 
-                        <Card style={[styles.tableCard, { backgroundColor: cardBg }]}>
+                        <Card style={[styles.tableCard, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
                             <View style={[styles.tableHeader, { backgroundColor: primaryColor }]}>
-                                <Text style={[styles.th, { flex: 1.2 }]}>Data</Text>
-                                <Text style={[styles.th, { flex: 2.5 }]}>Përshkrimi</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>Debit</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>Credit</Text>
-                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>Gjendja</Text>
+                                <Text style={[styles.th, { flex: 1.2 }]}>DATE</Text>
+                                <Text style={[styles.th, { flex: 2.5 }]}>DESCRIPTION</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>DEBIT</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>CREDIT</Text>
+                                <Text style={[styles.th, styles.thRight, { flex: 1.3 }]}>BAL</Text>
                             </View>
 
                             {ledgerEntries.length === 0 ? (
-                                <Text style={[styles.emptyText, { color: mutedColor }]}>Nuk ka transaksione</Text>
+                                <Text style={[styles.emptyText, { color: mutedColor }]}>No transactions found</Text>
                             ) : (
                                 ledgerEntries.map((entry, idx) => (
                                     <View
                                         key={entry.id}
                                         style={[
                                             styles.tableRow,
-                                            { backgroundColor: idx % 2 === 0 ? 'transparent' : (isDark ? '#1e293b80' : '#f8fafc') },
-                                            { borderBottomColor: borderColor }
+                                            { backgroundColor: idx % 2 === 0 ? 'transparent' : (isDark ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.5)') },
+                                            { borderBottomWidth: idx === ledgerEntries.length - 1 ? 0 : 1, borderBottomColor: borderColor }
                                         ]}
                                     >
                                         <Text style={[styles.td, { flex: 1.2, color: mutedColor }]}>
-                                            {new Date(entry.date).toLocaleDateString('sq-AL')}
+                                            {new Date(entry.date).toLocaleDateString(language === 'sq' ? 'sq-AL' : 'en-US')}
                                         </Text>
                                         <Text style={[styles.td, { flex: 2.5, color: textColor }]} numberOfLines={1}>
                                             {entry.description}
@@ -427,7 +434,7 @@ export function VendorLedgerScreen({ navigation, route }: any) {
                                         <Text style={[styles.td, styles.tdRight, { flex: 1.3, color: entry.credit > 0 ? '#10b981' : mutedColor }]}>
                                             {entry.credit > 0 ? formatCurrency(entry.credit) : '-'}
                                         </Text>
-                                        <Text style={[styles.td, styles.tdRight, { flex: 1.3, color: textColor, fontWeight: 'bold' }]}>
+                                        <Text style={[styles.td, styles.tdRight, { flex: 1.3, color: textColor, fontWeight: '700' }]}>
                                             {formatCurrency(entry.balance)}
                                         </Text>
                                     </View>
@@ -443,26 +450,32 @@ export function VendorLedgerScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { padding: 4 },
-    title: { fontSize: 20, fontWeight: 'bold', flex: 1, marginHorizontal: 8 },
-    content: { padding: 16, paddingBottom: 40 },
-    instruction: { fontSize: 14, marginBottom: 16, fontWeight: '500' },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 10 },
-    searchInput: { flex: 1, fontSize: 16 },
-    clientListItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderBottomWidth: 1, marginBottom: 8, gap: 12 },
-    clientIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    clientNameHeader: { fontSize: 16, fontWeight: '600' },
-    metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    metricCard: { flex: 1, padding: 12, alignItems: 'center', gap: 4 },
-    metricValue: { fontSize: 14, fontWeight: 'bold' },
-    metricLabel: { fontSize: 10 },
-    tableCard: { borderRadius: 12, overflow: 'hidden' },
-    tableHeader: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 8 },
-    th: { color: '#fff', fontSize: 11, fontWeight: '600' },
+    mainHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1 },
+    backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+    mainTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+    actionBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+    content: { padding: 20, paddingBottom: 40 },
+
+    searchContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
+
+    clientListItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, gap: 16 },
+    clientIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    clientNameHeader: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+
+    metricsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+    metricCard: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16 },
+    metricLabel: { fontSize: 11, fontWeight: '700', opacity: 0.7, marginBottom: 2 },
+    metricValue: { fontSize: 16, fontWeight: '800' },
+
+    tableCard: { borderRadius: 16, overflow: 'hidden' },
+    tableHeader: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 12 },
+    th: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
     thRight: { textAlign: 'right' },
-    tableRow: { flexDirection: 'row', paddingVertical: 10, paddingHorizontal: 8, borderBottomWidth: 1 },
-    td: { fontSize: 11 },
+    tableRow: { flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 12 },
+    td: { fontSize: 12, fontWeight: '500' },
     tdRight: { textAlign: 'right', fontFamily: 'monospace' },
-    emptyText: { padding: 20, textAlign: 'center' },
+
+    emptyText: { padding: 40, textAlign: 'center', fontSize: 14, fontWeight: '500' },
 });

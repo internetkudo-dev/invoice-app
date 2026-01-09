@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { Input } from './Input';
@@ -43,7 +43,10 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
 
     return (
         <Modal visible={visible} transparent animationType="slide">
-            <View style={styles.overlay}>
+            <KeyboardAvoidingView
+                style={styles.overlay}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
                 <TouchableOpacity style={styles.dismiss} onPress={onClose} />
                 <View style={[styles.content, { backgroundColor: bgColor }]}>
                     <View style={styles.header}>
@@ -53,7 +56,7 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.scroll}>
+                    <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
                         {fields.map(field => (
                             <Input
                                 key={field.key}
@@ -69,13 +72,13 @@ export function QuickAddModal({ visible, onClose, title, onAdd, fields }: QuickA
 
                     <View style={styles.footer}>
                         <Button
-                            title="Create & Select"
+                            title="Add"
                             onPress={handleAdd}
                             loading={loading}
                         />
                     </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }

@@ -200,7 +200,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                     </View>
                     <View style={styles.clientFooter}>
                         <View style={styles.revenueRow}>
-                            <Text style={styles.revenueValue}>{formatCurrency(revenue)}</Text>
+                            <Text style={[styles.revenueValue, { color: primaryColor }]}>{formatCurrency(revenue)}</Text>
                             <Text style={[styles.revenueLabel, { color: mutedColor }]}>të ardhura</Text>
                         </View>
                         {item.city && (
@@ -217,10 +217,15 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
-            <ScreenHeader
-                title={t('clients', language)}
-                subtitle="Menaxhimi"
-            />
+            <View style={styles.header}>
+                <View>
+                    <Text style={[styles.titleLabel, { color: mutedColor }]}>{t('management', language).toUpperCase()}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('clients', language)}</Text>
+                </View>
+                <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ClientForm')}>
+                    <Users color={primaryColor} size={20} />
+                </TouchableOpacity>
+            </View>
             <ScrollView
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
@@ -228,26 +233,27 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                 {/* Client Stats HUD */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                        <Card style={styles.statCard}>
+                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
                             <Users color="#818cf8" size={20} />
-                            <Text style={[styles.statValue, { color: textColor }]}>{stats.totalClients}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>{t('clients', language)}</Text>
-                        </Card>
-                        <Card style={styles.statCard}>
+                            <View>
+                                <Text style={[styles.statValue, { color: textColor }]}>{stats.totalClients}</Text>
+                                <Text style={[styles.statLabel, { color: mutedColor }]}>{t('clients', language)}</Text>
+                            </View>
+                        </View>
+                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
                             <DollarSign color="#10b981" size={20} />
-                            <Text style={[styles.statValue, { color: textColor }]}>{formatCurrency(stats.totalRevenue)}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>Të ardhura</Text>
-                        </Card>
-                        <Card style={styles.statCard}>
+                            <View>
+                                <Text style={[styles.statValue, { color: textColor }]}>{formatCurrency(stats.totalRevenue)}</Text>
+                                <Text style={[styles.statLabel, { color: mutedColor }]}>Të ardhura</Text>
+                            </View>
+                        </View>
+                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
                             <TrendingUp color="#0ea5e9" size={20} />
-                            <Text style={[styles.statValue, { color: textColor }]}>{stats.activeClients}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>Aktivë</Text>
-                        </Card>
-                        <Card style={styles.statCard}>
-                            <Star color="#f59e0b" size={20} />
-                            <Text style={[styles.statValue, { color: textColor }]}>{stats.withDiscount}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>Me zbritje</Text>
-                        </Card>
+                            <View>
+                                <Text style={[styles.statValue, { color: textColor }]}>{stats.activeClients}</Text>
+                                <Text style={[styles.statLabel, { color: mutedColor }]}>Aktivë</Text>
+                            </View>
+                        </View>
                     </ScrollView>
                 </View>
 
@@ -277,7 +283,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                                 style={[
                                     styles.filterChip,
                                     { backgroundColor: cardBg },
-                                    ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: '#818cf8' }
+                                    ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: primaryColor }
                                 ]}
                             >
                                 <Text style={[
@@ -331,42 +337,55 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    titleLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 },
+    title: { fontSize: 30, fontWeight: 'bold' },
+    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+
     scrollContent: { paddingBottom: 100, paddingHorizontal: 20 },
-    statsContainer: { paddingVertical: 16 },
+    statsContainer: { paddingVertical: 8, marginBottom: 8 },
     statsScroll: { gap: 12 },
-    statCard: { width: 140, padding: 16, alignItems: 'center', gap: 6 },
-    statValue: { fontSize: 18, fontWeight: 'bold' },
-    statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-    searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, marginBottom: 16, gap: 12 },
+    statCardPlain: { padding: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 130 },
+    statValue: { fontSize: 16, fontWeight: 'bold' },
+    statLabel: { fontSize: 11, fontWeight: '600' },
+
+    searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
     searchInput: { flex: 1, fontSize: 16 },
+
     filterScroll: { gap: 8, marginBottom: 16 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     filterText: { fontSize: 12, fontWeight: '600' },
+
     sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
     tinyLabel: { fontSize: 10, fontWeight: 'bold' },
     sortButtons: { flexDirection: 'row', gap: 16 },
     sortBtn: { paddingVertical: 4 },
     sortBtnText: { fontSize: 10, fontWeight: 'bold' },
-    clientList: { paddingHorizontal: 20 },
-    clientCard: { marginBottom: 12, padding: 16 },
+
+    clientList: { paddingHorizontal: 0 },
+    clientCard: { marginBottom: 12, padding: 16, borderRadius: 18 },
     clientHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     clientInfo: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 },
     clientName: { fontSize: 16, fontWeight: '700' },
     discountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 },
     discountText: { color: '#f59e0b', fontSize: 10, fontWeight: '700' },
+
     contactRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
-    contactText: { fontSize: 12 },
+    contactText: { fontSize: 13 },
     addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: 'rgba(129, 140, 248, 0.05)', padding: 6, borderRadius: 8 },
     addressText: { fontSize: 11, flex: 1 },
+
     clientActions: { flexDirection: 'row', gap: 4 },
     actionButton: { padding: 8 },
-    clientFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
+
+    clientFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 },
     revenueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-    revenueValue: { color: '#10b981', fontSize: 18, fontWeight: '800' },
+    revenueValue: { fontSize: 18, fontWeight: '800' },
     revenueLabel: { fontSize: 11, fontWeight: '600' },
     cityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(129, 140, 248, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     cityText: { color: '#818cf8', fontSize: 10, fontWeight: '700' },
+
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 14, fontWeight: '500' },
 });

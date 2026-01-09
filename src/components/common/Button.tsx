@@ -7,19 +7,23 @@ import {
     ViewStyle,
     View,
     Platform,
+    TextStyle,
 } from 'react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 
 interface ButtonProps {
     title: string;
     onPress: () => void;
-    variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success';
+    variant?: 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success' | 'shortcut';
     loading?: boolean;
     disabled?: boolean;
     style?: ViewStyle;
+    textStyle?: TextStyle;
     size?: 'small' | 'medium' | 'large';
     icon?: any;
     fullWidth?: boolean;
+    chevron?: boolean;
 }
 
 export function Button({
@@ -29,9 +33,11 @@ export function Button({
     loading = false,
     disabled = false,
     style,
+    textStyle,
     size = 'medium',
     icon: Icon,
     fullWidth = true,
+    chevron = false,
 }: ButtonProps) {
     const { primaryColor, isDark } = useTheme();
 
@@ -47,6 +53,14 @@ export function Button({
                 return [styles.outline, { borderColor: isDark ? '#334155' : '#e2e8f0' }];
             case 'ghost':
                 return styles.ghost;
+            case 'shortcut':
+                return {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                    borderWidth: 1,
+                    borderColor: isDark ? '#334155' : '#e2e8f0',
+                    justifyContent: 'flex-start',
+                    paddingHorizontal: 12,
+                };
             default:
                 return {
                     backgroundColor: primaryColor,
@@ -73,6 +87,8 @@ export function Button({
                 return { color: isDark ? '#fff' : '#1e293b' };
             case 'ghost':
                 return { color: primaryColor };
+            case 'shortcut':
+                return { color: isDark ? '#fff' : '#1e293b' };
             default:
                 return styles.primaryText;
         }
@@ -89,7 +105,7 @@ export function Button({
         }
     };
 
-    const iconColor = getTextStyle().color;
+    const iconColor = (textStyle as any)?.color || getTextStyle().color;
 
     return (
         <TouchableOpacity
@@ -108,9 +124,30 @@ export function Button({
             {loading ? (
                 <ActivityIndicator color={variant === 'primary' || variant === 'danger' || variant === 'success' ? '#fff' : primaryColor} size="small" />
             ) : (
-                <View style={styles.content}>
-                    {Icon && <Icon size={size === 'small' ? 14 : size === 'large' ? 20 : 18} color={iconColor} />}
-                    <Text style={[styles.text, getTextStyle(), { fontSize: size === 'small' ? 13 : size === 'large' ? 17 : 15 }]}>{title}</Text>
+                <View style={[styles.content, variant === 'shortcut' && { flex: 1, justifyContent: 'space-between' }]}>
+                    <View style={[styles.content, variant === 'shortcut' && { justifyContent: 'flex-start', flex: 1 }]}>
+                        {Icon && (
+                            <View style={[
+                                variant === 'shortcut' && [styles.shortcutIconBox, { backgroundColor: isDark ? `${primaryColor}20` : `${primaryColor}10` }]
+                            ]}>
+                                <Icon size={size === 'small' ? 14 : size === 'large' ? 20 : 18} color={variant === 'shortcut' ? primaryColor : iconColor} />
+                            </View>
+                        )}
+                        <Text
+                            style={[
+                                styles.text,
+                                getTextStyle(),
+                                { fontSize: size === 'small' ? 13 : size === 'large' ? 17 : 15 },
+                                variant === 'shortcut' && { textAlign: 'left', fontWeight: 'bold' },
+                                textStyle
+                            ]}
+                        >
+                            {title}
+                        </Text>
+                    </View>
+                    {(variant === 'shortcut' || chevron) && (
+                        <ChevronRight size={18} color={variant === 'shortcut' ? primaryColor : iconColor} />
+                    )}
                 </View>
             )}
         </TouchableOpacity>
@@ -192,4 +229,12 @@ const styles = StyleSheet.create({
     primaryText: {
         color: '#fff',
     },
+    shortcutIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    }
 });

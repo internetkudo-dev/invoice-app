@@ -1,0 +1,350 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Switch, ActivityIndicator } from 'react-native';
+import {
+    CreditCard,
+    Mail,
+    Download,
+    User,
+    ArrowLeft,
+    ShieldCheck,
+    ChevronRight,
+    FileText,
+    Settings
+} from 'lucide-react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { supabase } from '../../api/supabase';
+import { useAuth } from '../../hooks/useAuth';
+import { useTheme } from '../../hooks/useTheme';
+import { Card, Button, Input } from '../../components/common';
+import { t } from '../../i18n';
+
+export function AdvancedSettingsScreen({ navigation }: any) {
+    const { user } = useAuth();
+    const { isDark, primaryColor, language, setLanguage } = useTheme();
+    const [saving, setSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [profile, setProfile] = useState<any>(null);
+    const [activeSection, setActiveSection] = useState<string | null>('integrations');
+
+    const bgColor = isDark ? '#0f172a' : '#f8fafc';
+    const textColor = isDark ? '#fff' : '#1e293b';
+    const mutedColor = isDark ? '#94a3b8' : '#64748b';
+    const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const borderColor = isDark ? '#334155' : '#e2e8f0';
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
+
+    const fetchProfile = async () => {
+        if (!user) return;
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (data) setProfile(data);
+    };
+
+    const updateField = async (field: string, value: any) => {
+        if (!user) return;
+
+        // Update local state immediately for snappy UI
+        setProfile((prev: any) => ({ ...prev, [field]: value }));
+
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ [field]: value, updated_at: new Date().toISOString() })
+                .eq('id', user.id);
+
+            if (error) throw error;
+            setLastSaved(new Date());
+        } catch (error: any) {
+            console.error('Auto-save error:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleExportData = async (format: 'json' | 'csv') => {
+        try {
+            const { data: invoices } = await supabase.from('invoices').select('*').eq('user_id', user?.id);
+            const { data: clients } = await supabase.from('clients').select('*').eq('user_id', user?.id);
+            const { data: products } = await supabase.from('products').select('*').eq('user_id', user?.id);
+            const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', user?.id);
+
+            if (format === 'json') {
+                const backupData = {
+                    invoices: invoices || [],
+                    clients: clients || [],
+                    products: products || [],
+                    expenses: expenses || []
+                };
+                const content = JSON.stringify(backupData, null, 2);
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
+                const fileUri = `${folder}backup.json`;
+                await FileSystem.writeAsStringAsync(fileUri, content);
+                await Sharing.shareAsync(fileUri);
+            } else {
+                const csvHeader = 'Date,Number,Client,Total,Status\n';
+                const csvRows = invoices?.map(inv => `${inv.issue_date},${inv.invoice_number},${inv.client_id},${inv.total_amount},${inv.status}`).join('\n') || '';
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
+                const fileUri = `${folder}invoices.csv`;
+                await FileSystem.writeAsStringAsync(fileUri, csvHeader + csvRows);
+                await Sharing.shareAsync(fileUri);
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Export failed');
+        }
+    };
+
+    const renderHeader = (title: string, Icon: any, section: string, color: string) => {
+        const isActive = activeSection === section;
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.sectionHeader,
+                    {
+                        backgroundColor: cardBg,
+                        borderColor: isActive ? color : borderColor,
+                        borderLeftColor: color,
+                        borderLeftWidth: 4
+                    }
+                ]}
+                onPress={() => setActiveSection(isActive ? null : section)}
+            >
+                <View style={styles.sectionHeaderLeft}>
+                    <View style={[styles.sectionIcon, { backgroundColor: color + '15' }]}>
+                        <Icon color={color} size={20} />
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
+                </View>
+                <ChevronRight
+                    color={mutedColor}
+                    size={20}
+                    style={{ transform: [{ rotate: isActive ? '90deg' : '0deg' }] }}
+                />
+            </TouchableOpacity>
+        );
+    };
+
+    if (!profile) return null;
+
+    return (
+        <View style={[styles.container, { backgroundColor: bgColor }]}>
+            <View style={styles.header}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconButton, { backgroundColor: cardBg }]}>
+                        <ArrowLeft color={textColor} size={20} />
+                    </TouchableOpacity>
+                    <View style={{ marginLeft: 4 }}>
+                        <Text style={[styles.title, { color: textColor }]}>Advanced</Text>
+                        <Text style={[styles.subtitle, { color: mutedColor }]}>System & Integrations</Text>
+                    </View>
+                </View>
+
+                <View style={styles.statusIndicator}>
+                    {saving ? (
+                        <View style={styles.savingBadge}>
+                            <ActivityIndicator size="small" color={primaryColor} style={{ marginRight: 6 }} />
+                            <Text style={{ color: primaryColor, fontSize: 12, fontWeight: '600' }}>Saving...</Text>
+                        </View>
+                    ) : lastSaved ? (
+                        <View style={styles.savedBadge}>
+                            <ShieldCheck color="#10b981" size={14} style={{ marginRight: 4 }} />
+                            <Text style={{ color: '#10b981', fontSize: 12, fontWeight: '500' }}>Synced</Text>
+                        </View>
+                    ) : null}
+                </View>
+            </View>
+
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                {/* Stripe/PayPal Integration */}
+                {renderHeader('Payment Integrations', CreditCard, 'integrations', '#6366f1')}
+                {activeSection === 'integrations' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.subLabel, { color: mutedColor }]}>Native Integrations</Text>
+                        <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
+                            Connect your Stripe or PayPal account to accept online payments and sync transactions.
+                        </Text>
+                        <Button
+                            title="Manage Stripe / PayPal"
+                            variant="shortcut"
+                            icon={CreditCard}
+                            onPress={() => navigation.navigate('PaymentIntegrations')}
+                        />
+                    </Card>
+                )}
+
+                {/* Email & SMTP */}
+                {renderHeader('Email Server (SMTP)', Mail, 'smtp', '#10b981')}
+                {activeSection === 'smtp' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.hint, { color: mutedColor, marginBottom: 16 }]}>
+                            Configure your SMTP server to send invoices directly via email.
+                        </Text>
+                        <Input
+                            label="SMTP Host"
+                            value={profile.smtp_host}
+                            onChangeText={(val) => updateField('smtp_host', val)}
+                            placeholder="smtp.gmail.com"
+                        />
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <View style={{ flex: 1 }}>
+                                <Input
+                                    label="Port"
+                                    value={String(profile.smtp_port || '')}
+                                    onChangeText={(val) => updateField('smtp_port', val ? Number(val) : null)}
+                                    placeholder="587"
+                                    keyboardType="number-pad"
+                                />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.inputLabel, { color: textColor, marginBottom: 8 }]}>Secure (SSL/TLS)</Text>
+                                <View style={styles.switchContainer}>
+                                    <Switch
+                                        value={profile.smtp_secure}
+                                        onValueChange={(v) => updateField('smtp_secure', v)}
+                                        trackColor={{ false: '#cbd5e1', true: primaryColor + '50' }}
+                                        thumbColor={profile.smtp_secure ? primaryColor : '#f4f3f4'}
+                                    />
+                                    <Text style={[styles.switchText, { color: mutedColor }]}>
+                                        {profile.smtp_secure ? 'Encrypted' : 'Standard'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                        <Input
+                            label="Username"
+                            value={profile.smtp_user}
+                            onChangeText={(val) => updateField('smtp_user', val)}
+                        />
+                        <Input
+                            label="Password"
+                            value={profile.smtp_pass}
+                            onChangeText={(val) => updateField('smtp_pass', val)}
+                            secureTextEntry
+                        />
+                        <Input
+                            label="From Email"
+                            value={profile.smtp_from_email}
+                            onChangeText={(val) => updateField('smtp_from_email', val)}
+                            placeholder="billing@yourcompany.com"
+                        />
+                    </Card>
+                )}
+
+                {/* Backup & Data */}
+                {renderHeader('Backup & Restore', Download, 'backup', '#f59e0b')}
+                {activeSection === 'backup' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
+                            Export all your data for backup or accounting purposes.
+                        </Text>
+                        <Button title="Backup All Data (JSON)" variant="shortcut" onPress={() => handleExportData('json')} icon={Download} />
+                        <View style={{ height: 12 }} />
+                        <Button title="Export Invoices (CSV)" variant="shortcut" onPress={() => handleExportData('csv')} icon={FileText} />
+                    </Card>
+                )}
+
+                {/* Account Settings */}
+                {renderHeader('Account & Security', User, 'account', '#ef4444')}
+                {activeSection === 'account' && (
+                    <Card style={styles.sectionContent}>
+                        <Button
+                            title="Manage Profile & Security"
+                            variant="shortcut"
+                            icon={User}
+                            onPress={() => navigation.navigate('Profile')}
+                        />
+                        <View style={{ height: 12 }} />
+                        <Button
+                            title="Manage Companies"
+                            variant="shortcut"
+                            icon={Settings}
+                            onPress={() => navigation.navigate('ManageCompanies')}
+                        />
+                    </Card>
+                )}
+            </ScrollView>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1 },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 60,
+        paddingBottom: 20
+    },
+    iconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2
+    },
+    title: { fontSize: 22, fontWeight: 'bold', letterSpacing: -0.5 },
+    subtitle: { fontSize: 13, fontWeight: '500', marginTop: -2 },
+    statusIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    savingBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20
+    },
+    savedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20
+    },
+    scroll: { flex: 1 },
+    scrollContent: { padding: 16, paddingBottom: 60 },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2
+    },
+    sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
+    sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: '700' },
+    sectionContent: { padding: 20, borderRadius: 20, marginTop: -8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+    subLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+    hint: { fontSize: 13, lineHeight: 20 },
+    inputLabel: { fontSize: 14, fontWeight: '600' },
+    switchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+        backgroundColor: 'rgba(0,0,0,0.02)',
+        padding: 10,
+        borderRadius: 12
+    },
+    switchText: { fontSize: 12, fontWeight: '600', marginLeft: 8 }
+});

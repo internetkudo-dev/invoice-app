@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Image, Switch, Platform } from 'react-native';
-import { DollarSign, Percent, ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X, Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages, ShieldCheck, FileText, Trash2, Github, Briefcase, Users, Layout, Plus, Mail, Building, ArrowLeft, User } from 'lucide-react-native';
+import { DollarSign, Percent, ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X, Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages, ShieldCheck, FileText, Trash2, Github, Briefcase, Users, Layout, Plus, Mail, Building, ArrowLeft, User, Zap, Settings } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -247,20 +247,37 @@ export function SettingsScreen({ navigation }: any) {
         );
     };
 
-    const renderHeader = (title: string, Icon: any, section: string, color: string) => (
-        <TouchableOpacity
-            style={[styles.sectionHeader, { borderLeftColor: color }]}
-            onPress={() => setActiveSection(activeSection === section ? null : section)}
-        >
-            <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionIcon, { backgroundColor: color + '15' }]}>
-                    <Icon color={color} size={20} />
+    const renderHeader = (title: string, Icon: any, section: string, color: string) => {
+        const isActive = activeSection === section;
+        const borderColor = isDark ? '#334155' : '#e2e8f0';
+
+        return (
+            <TouchableOpacity
+                style={[
+                    styles.sectionHeader,
+                    {
+                        backgroundColor: cardBg,
+                        borderColor: isActive ? color : borderColor,
+                        borderLeftColor: color,
+                        borderLeftWidth: 4
+                    }
+                ]}
+                onPress={() => setActiveSection(isActive ? null : section)}
+            >
+                <View style={styles.sectionHeaderLeft}>
+                    <View style={[styles.sectionIcon, { backgroundColor: color + '15' }]}>
+                        <Icon color={color} size={20} />
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
                 </View>
-                <Text style={[styles.sectionTitle, { color: textColor }]}>{title}</Text>
-            </View>
-            <ChevronRight color={mutedColor} size={20} style={{ transform: [{ rotate: activeSection === section ? '90deg' : '0deg' }] }} />
-        </TouchableOpacity>
-    );
+                <ChevronRight
+                    color={mutedColor}
+                    size={20}
+                    style={{ transform: [{ rotate: isActive ? '90deg' : '0deg' }] }}
+                />
+            </TouchableOpacity>
+        );
+    };
 
     const businessLogo = profile.logo_url;
 
@@ -292,17 +309,21 @@ export function SettingsScreen({ navigation }: any) {
                     </View>
                 </Card>
 
-                {/* Profile Quick Access */}
-                <TouchableOpacity
-                    style={[styles.profileShortcut, { backgroundColor: `${primaryColor}10` }]}
+                <Button
+                    title="Profile & Personalization"
+                    variant="shortcut"
+                    icon={User}
                     onPress={() => navigation.navigate('Profile')}
-                >
-                    <View style={[styles.shortcutIcon, { backgroundColor: `${primaryColor}15` }]}>
-                        <User color={primaryColor} size={20} />
-                    </View>
-                    <Text style={[styles.shortcutTitleLabel, { color: primaryColor }]}>Go to Profile & Personalization</Text>
-                    <ChevronRight color={primaryColor} size={20} />
-                </TouchableOpacity>
+                    style={{ marginBottom: 12 }}
+                />
+
+                <Button
+                    title="Advanced Settings (SMTP, Stripe...)"
+                    variant="shortcut"
+                    icon={Zap}
+                    onPress={() => navigation.navigate('AdvancedSettings')}
+                    style={{ marginBottom: 24 }}
+                />
 
                 {/* Company Info */}
                 {renderHeader(t('companyProfile', language), Briefcase, 'company', primaryColor)}
@@ -325,7 +346,25 @@ export function SettingsScreen({ navigation }: any) {
                     </Card>
                 )}
 
-                {/* Payments & Bank */}
+                {/* Identity & Visuals */}
+                {renderHeader('Logos & Signatures', Camera, 'visuals', primaryColor)}
+                {activeSection === 'visuals' && (
+                    <Card style={styles.sectionContent}>
+                        <AssetPicker label="Company Logo" value={profile.logo_url} onPick={() => pickImage('logo')} onClear={() => setProfile({ ...profile, logo_url: '' })} icon={ImageIcon} isDark={isDark} />
+                        <AssetPicker
+                            label="Signature"
+                            value={profile.signature_url}
+                            onPick={() => pickImage('signature')}
+                            onClear={() => setProfile({ ...profile, signature_url: '' })}
+                            onDraw={() => setShowSignaturePad(true)}
+                            icon={PenTool}
+                            isDark={isDark}
+                        />
+                        <AssetPicker label="Official Stamp" value={profile.stamp_url} onPick={() => pickImage('stamp')} onClear={() => setProfile({ ...profile, stamp_url: '' })} icon={Stamp} isDark={isDark} />
+                    </Card>
+                )}
+
+                {/* Bank Details only */}
                 {renderHeader(t('bankDetails', language), CreditCard, 'payments', primaryColor)}
                 {activeSection === 'payments' && (
                     <Card style={styles.sectionContent}>
@@ -333,44 +372,6 @@ export function SettingsScreen({ navigation }: any) {
                         <Input label="Bank Name" value={profile.bank_name} onChangeText={(t) => setProfile({ ...profile, bank_name: t })} />
                         <Input label="IBAN" value={profile.bank_iban} onChangeText={(t) => setProfile({ ...profile, bank_iban: t })} />
                         <Input label="SWIFT/BIC" value={profile.bank_swift} onChangeText={(t) => setProfile({ ...profile, bank_swift: t })} />
-
-                        <View style={styles.divider} />
-                        <Text style={[styles.subLabel, { color: mutedColor }]}>Payment Links (Adds Buttons to PDF)</Text>
-                        <Input label="Stripe Payment Link" value={profile.payment_link_stripe} onChangeText={(t) => setProfile({ ...profile, payment_link_stripe: t })} placeholder="https://buy.stripe.com/..." />
-                        <Input label="PayPal Link" value={profile.payment_link_paypal} onChangeText={(t) => setProfile({ ...profile, payment_link_paypal: t })} placeholder="https://paypal.me/..." />
-
-                        <View style={styles.divider} />
-                        <Text style={[styles.subLabel, { color: mutedColor }]}>Payment Integrations</Text>
-                        <Button
-                            title="Connect Stripe / PayPal"
-                            variant="primary"
-                            icon={CreditCard}
-                            onPress={() => navigation.navigate('PaymentIntegrations')}
-                            style={{ marginTop: 8 }}
-                        />
-                    </Card>
-                )}
-
-                {/* Email & SMTP */}
-                {renderHeader('Email Settings (SMTP)', Mail, 'smtp', primaryColor)}
-                {activeSection === 'smtp' && (
-                    <Card style={styles.sectionContent}>
-                        <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
-                            Configure your SMTP server to send invoices directly to clients via email.
-                        </Text>
-                        <Input label="SMTP Host" value={profile.smtp_host} onChangeText={(t) => setProfile({ ...profile, smtp_host: t })} placeholder="smtp.gmail.com" />
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Input label="Port" value={String(profile.smtp_port || '')} onChangeText={(t) => setProfile({ ...profile, smtp_port: Number(t) })} placeholder="587" keyboardType="number-pad" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 16 }}>
-                                <Text style={[styles.label, { color: textColor, marginBottom: 8 }]}>Secure (SSL/TLS)</Text>
-                                <Switch value={profile.smtp_secure} onValueChange={(v) => setProfile({ ...profile, smtp_secure: v })} />
-                            </View>
-                        </View>
-                        <Input label="Username" value={profile.smtp_user} onChangeText={(t) => setProfile({ ...profile, smtp_user: t })} />
-                        <Input label="Password" value={profile.smtp_pass} onChangeText={(t) => setProfile({ ...profile, smtp_pass: t })} secureTextEntry />
-                        <Input label="From Email (Optional)" value={profile.smtp_from_email} onChangeText={(t) => setProfile({ ...profile, smtp_from_email: t })} placeholder="invoicing@yourcompany.com" />
                     </Card>
                 )}
 
@@ -408,43 +409,25 @@ export function SettingsScreen({ navigation }: any) {
                         <View style={styles.divider} />
                         <Button
                             title="Invoice Design & Style"
-                            variant="primary"
+                            variant="shortcut"
                             icon={Layout}
                             onPress={() => navigation.navigate('TemplateEditor')}
                             style={{ marginTop: 8 }}
                         />
                         <Button
                             title="Contract Templates"
-                            variant="outline"
+                            variant="shortcut"
                             icon={FileText}
                             onPress={() => navigation.navigate('ContractTemplates')}
                             style={{ marginTop: 8 }}
                         />
                         <Button
                             title="Invoice Fields & Defaults"
-                            variant="outline"
-                            icon={FileText}
+                            variant="shortcut"
+                            icon={Settings}
                             onPress={() => navigation.navigate('InvoiceTemplateSettings')}
                             style={{ marginTop: 8 }}
                         />
-                    </Card>
-                )}
-
-                {/* Identity & Visuals */}
-                {renderHeader('Logos & Signatures', Camera, 'visuals', primaryColor)}
-                {activeSection === 'visuals' && (
-                    <Card style={styles.sectionContent}>
-                        <AssetPicker label="Company Logo" value={profile.logo_url} onPick={() => pickImage('logo')} onClear={() => setProfile({ ...profile, logo_url: '' })} icon={ImageIcon} isDark={isDark} />
-                        <AssetPicker
-                            label="Signature"
-                            value={profile.signature_url}
-                            onPick={() => pickImage('signature')}
-                            onClear={() => setProfile({ ...profile, signature_url: '' })}
-                            onDraw={() => setShowSignaturePad(true)}
-                            icon={PenTool}
-                            isDark={isDark}
-                        />
-                        <AssetPicker label="Official Stamp" value={profile.stamp_url} onPick={() => pickImage('stamp')} onClear={() => setProfile({ ...profile, stamp_url: '' })} icon={Stamp} isDark={isDark} />
                     </Card>
                 )}
 
@@ -485,46 +468,13 @@ export function SettingsScreen({ navigation }: any) {
 
                         <View style={styles.divider} />
 
-                        <Text style={[styles.label, { color: textColor }]}>Join another Company</Text>
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Input
-                                    placeholder="Enter Company ID"
-                                    value={joinId}
-                                    onChangeText={setJoinId}
-                                />
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.smallActionBtn, { backgroundColor: primaryColor, marginLeft: 8, height: 50, marginTop: 4 }]}
-                                onPress={() => joinCompany(joinId)}
-                            >
-                                <Plus color="#fff" size={20} />
-                            </TouchableOpacity>
-                        </View>
-
                         <Button
                             title="Manage Companies"
-                            variant="primary"
+                            variant="shortcut"
                             icon={Building}
                             onPress={() => navigation.navigate('ManageCompanies')}
                             style={{ marginBottom: 16 }}
                         />
-
-                        <Text style={[styles.hint, { color: mutedColor, marginTop: 12 }]}>
-                            Owners can see all company data. Workers can view and create but cannot delete/edit invoices.
-                        </Text>
-                    </Card>
-                )}
-
-
-
-                {/* Data Management */}
-                {renderHeader('Backup & Account', Download, 'data', primaryColor)}
-                {activeSection === 'data' && (
-                    <Card style={styles.sectionContent}>
-                        <Button title="Backup All Data (JSON)" variant="outline" onPress={() => handleExportData('json')} icon={Download} />
-                        <View style={{ height: 12 }} />
-                        <Button title="Export for Accountant (CSV)" variant="outline" onPress={() => handleExportData('csv')} icon={FileText} />
                     </Card>
                 )}
 
@@ -538,7 +488,7 @@ export function SettingsScreen({ navigation }: any) {
                 onSave={(sig) => setProfile(prev => ({ ...prev, signature_url: sig }))}
                 primaryColor={primaryColor}
             />
-        </View>
+        </View >
     );
 }
 
@@ -593,11 +543,24 @@ const styles = StyleSheet.create({
     title: { fontSize: 28, fontWeight: 'bold' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 60 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: 'transparent', borderLeftWidth: 4, marginBottom: 8 },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2
+    },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-    sectionIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    sectionTitle: { fontSize: 16, fontWeight: '600' },
-    sectionContent: { padding: 16, marginBottom: 16 },
+    sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: '700' },
+    sectionContent: { padding: 20, borderRadius: 20, marginTop: -8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
     label: { fontSize: 14, fontWeight: 'bold', marginBottom: 12 },
     subLabel: { fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
     divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 16 },

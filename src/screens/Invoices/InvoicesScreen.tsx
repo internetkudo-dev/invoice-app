@@ -62,6 +62,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         }
     }, [route?.params?.tab]);
 
+    const borderColor = isDark ? '#334155' : '#e2e8f0';
+
     useFocusEffect(
         useCallback(() => {
             fetchData();
@@ -195,7 +197,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                     </View>
                     <View style={styles.invoiceFooter}>
                         <Text style={[styles.invoiceDate, { color: mutedColor }]}>{item.issue_date}</Text>
-                        <Text style={styles.invoiceAmount}>{formatCurrency(Number(item.total_amount), profile?.currency)}</Text>
+                        <Text style={[styles.invoiceAmount, { color: primaryColor }]}>{formatCurrency(Number(item.total_amount), profile?.currency)}</Text>
                     </View>
                 </Card>
             </TouchableOpacity>
@@ -206,16 +208,17 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
+                    <Text style={[styles.titleLabel, { color: mutedColor }]}>OVERVIEW</Text>
                     <Text style={[styles.title, { color: textColor }]}>
                         {selectedType === 'invoice' ? t('invoices', language) : selectedType === 'offer' ? t('offers', language) : 'Contracts'}
                     </Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => setShowSearch(!showSearch)}>
-                        <Search color="#818cf8" size={20} />
+                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg, borderColor: borderColor }]} onPress={() => setShowSearch(!showSearch)}>
+                        <Search color={primaryColor} size={20} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('QRScanner')}>
-                        <QrCode color="#818cf8" size={20} />
+                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg, borderColor: borderColor }]} onPress={() => navigation.navigate('QRScanner')}>
+                        <QrCode color={primaryColor} size={20} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -225,10 +228,13 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 {(['invoice', 'offer', 'contract'] as const).map((tValue) => (
                     <TouchableOpacity
                         key={tValue}
-                        style={[styles.typeOption, { backgroundColor: cardBg }, selectedType === tValue && { backgroundColor: primaryColor }]}
+                        style={[
+                            styles.typeOption,
+                            selectedType === tValue ? { backgroundColor: cardBg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 } : { backgroundColor: 'transparent' }
+                        ]}
                         onPress={() => setSelectedType(tValue)}
                     >
-                        <Text style={[styles.typeText, { color: selectedType === tValue ? '#fff' : mutedColor }]}>
+                        <Text style={[styles.typeText, { color: selectedType === tValue ? primaryColor : mutedColor }]}>
                             {tValue.toUpperCase()}
                         </Text>
                     </TouchableOpacity>
@@ -267,8 +273,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                             key={status.key}
                             style={[
                                 styles.filterButton,
-                                { backgroundColor: cardBg },
-                                selectedStatus === status.key && styles.filterButtonActive,
+                                { backgroundColor: cardBg, borderColor: borderColor },
+                                selectedStatus === status.key && { backgroundColor: primaryColor, borderColor: primaryColor },
                             ]}
                             onPress={() => handleStatusFilter(status.key)}
                         >
@@ -322,32 +328,33 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    title: { fontSize: 32, fontWeight: 'bold' },
-    typeSelector: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, overflow: 'hidden', gap: 1, backgroundColor: '#334155' },
-    typeOption: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-    typeText: { fontSize: 12, fontWeight: 'bold' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    titleLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 },
+    title: { fontSize: 30, fontWeight: 'bold' },
+    typeSelector: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, borderRadius: 16, padding: 4, backgroundColor: 'rgba(0,0,0,0.03)', gap: 4 },
+    typeOption: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
+    typeText: { fontSize: 13, fontWeight: '700' },
     headerActions: { flexDirection: 'row', gap: 12 },
-    iconButton: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#334155' },
-    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, marginBottom: 12, gap: 12 },
+    iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
     searchInput: { flex: 1, fontSize: 16 },
-    filterWrapper: { marginBottom: 12 },
-    filterContent: { paddingHorizontal: 16, gap: 10, flexDirection: 'row' },
-    filterButton: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#334155' },
-    filterButtonActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
+    filterWrapper: { marginBottom: 16 },
+    filterContent: { paddingHorizontal: 20, gap: 10, flexDirection: 'row' },
+    filterButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
+    filterButtonActive: {},
     filterText: { fontWeight: '600', fontSize: 13 },
     filterTextActive: { color: '#fff' },
-    listContent: { padding: 16, paddingBottom: 100 },
-    invoiceCard: { marginBottom: 12 },
+    listContent: { padding: 20, paddingBottom: 100 },
+    invoiceCard: { marginBottom: 12, padding: 16, borderRadius: 18 },
     invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     invoiceInfo: { flex: 1 },
-    invoiceNumber: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+    invoiceNumber: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
     clientName: { fontSize: 14 },
     badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     previewIcon: { padding: 8, borderRadius: 10 },
-    invoiceFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    invoiceDate: { fontSize: 12, fontWeight: '500' },
-    invoiceAmount: { color: '#818cf8', fontSize: 18, fontWeight: 'bold' },
+    invoiceFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12, marginTop: 4 },
+    invoiceDate: { fontSize: 13, fontWeight: '500' },
+    invoiceAmount: { fontSize: 18, fontWeight: '800' },
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { textAlign: 'center' },
 });
