@@ -130,9 +130,12 @@ export function SupplierBillsListScreen({ navigation }: any) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{t('supplierBills', language)}</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('SupplierBillForm')} style={styles.addButton}>
-                    <Plus color={primaryColor} size={28} />
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('supplierBills', language)}</Text>
+                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('SupplierBillForm')} style={[styles.addButton, { backgroundColor: cardBg }]}>
+                    <Plus color={primaryColor} size={24} />
                 </TouchableOpacity>
             </View>
 
@@ -177,10 +180,11 @@ export function SupplierBillsListScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold' },
-    addButton: { padding: 4 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
+    addButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     content: { flex: 1, paddingHorizontal: 16 },
     searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16, gap: 8 },
     listContent: { paddingBottom: 100 },

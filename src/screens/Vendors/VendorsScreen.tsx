@@ -22,7 +22,7 @@ import { formatCurrency } from '../../utils/format';
 
 interface VendorsScreenProps {
     navigation: any;
-    showHeader?: boolean; // Kept for types but ignoring in new layout
+    showHeader?: boolean;
 }
 
 export function VendorsScreen({ navigation }: VendorsScreenProps) {
@@ -40,12 +40,10 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const borderColor = isDark ? '#334155' : '#e2e8f0';
+    const inputBg = isDark ? '#1e293b' : '#ffffff';
 
-    // Derive cities for filtering
     const cities = ['Të gjitha', ...Array.from(new Set(vendors.map(v => v.address?.split(',').pop()?.trim()).filter((c): c is string => !!c)))];
 
-    // Stats calculation
     const stats = {
         totalVendors: vendors.length,
         totalExpenses: Object.values(vendorStats).reduce((sum, val) => sum + val, 0),
@@ -65,17 +63,22 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
             const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
             const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
 
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('vendors')
                 .select('*')
                 .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
                 .order('name');
 
+            if (error) {
+                console.error('Error fetching vendors:', error);
+                Alert.alert('Error', 'Failed to load vendors');
+                return;
+            }
+
             if (data) {
                 setVendors(data);
-                applyFiltersAndSort(data, searchQuery, selectedFilter, sortBy);
+                // applyFiltersAndSort called by useEffect automatically when vendors changes
 
-                // Fetch expenses per vendor
                 const { data: expenses } = await supabase
                     .from('expenses')
                     .select('vendor_id, amount')
@@ -99,23 +102,20 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     const applyFiltersAndSort = (data: Vendor[], query: string, city: string | null, sort: string) => {
         let filtered = [...data];
 
-        // Search
         if (query.trim()) {
             const q = query.toLowerCase();
             filtered = filtered.filter(v =>
-                v.name.toLowerCase().includes(q) ||
-                v.email?.toLowerCase().includes(q) ||
-                v.phone?.includes(q) ||
-                v.tax_id?.toLowerCase().includes(q)
+                (v.name || '').toLowerCase().includes(q) ||
+                (v.email || '').toLowerCase().includes(q) ||
+                (v.phone || '').includes(q) ||
+                (v.tax_id || '').toLowerCase().includes(q)
             );
         }
 
-        // City filter
         if (city && city !== 'Të gjitha') {
             filtered = filtered.filter(v => v.address?.includes(city));
         }
 
-        // Sort
         filtered.sort((a, b) => {
             if (sort === 'name') return a.name.localeCompare(b.name);
             if (sort === 'value') return (vendorStats[b.id] || 0) - (vendorStats[a.id] || 0);
@@ -149,6 +149,19 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
         ]);
     };
 
+    const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
+        const Icon = icon;
+        return (
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+                <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
+            </View>
+        );
+    };
+
     const renderVendor = (item: Vendor) => {
         const expenses = vendorStats[item.id] || 0;
 
@@ -158,7 +171,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('VendorLedger', { vendorId: item.id })}
             >
-                <Card style={[styles.vendorCard, { backgroundColor: cardBg, borderColor, borderWidth: 1, shadowColor: 'transparent' }]}>
+                <View style={[styles.vendorCard, { backgroundColor: cardBg }]}>
                     <View style={styles.vendorHeader}>
                         <View style={styles.vendorInfo}>
                             <View style={styles.nameRow}>
@@ -189,25 +202,25 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                             </View>
                         </View>
                         <TouchableOpacity onPress={() => handleDelete(item.id, item.name)} style={styles.deleteButton}>
-                            <Trash2 color={mutedColor} size={16} />
+                            <Trash2 color={mutedColor} size={18} />
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.vendorFooter}>
                         <View style={styles.expenseRow}>
-                            <Text style={[styles.expenseLabel, { color: mutedColor }]}>Total Expenses</Text>
-                            <Text style={[styles.expenseValue, { color: textColor }]}>{formatCurrency(expenses)}</Text>
+                            <Text style={[styles.expenseValue, { color: '#ef4444' }]}>{formatCurrency(expenses)}</Text>
+                            <Text style={[styles.expenseLabel, { color: mutedColor }]}>shpenzime</Text>
                         </View>
                         <View style={styles.actionRow}>
                             <TouchableOpacity
                                 onPress={() => navigation.navigate('VendorForm', { vendorId: item.id })}
-                                style={[styles.miniBtn, { borderColor: borderColor }]}
+                                style={[styles.miniBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}
                             >
-                                <Edit2 color={textColor} size={14} />
+                                <Edit2 color={textColor} size={16} />
                             </TouchableOpacity>
                         </View>
                     </View>
-                </Card>
+                </View>
             </TouchableOpacity>
         );
     };
@@ -216,11 +229,11 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.titleLabel, { color: primaryColor }]}>MANAGEMENT</Text>
-                    <Text style={[styles.title, { color: textColor }]}>VENDORS</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>Vendors</Text>
                 </View>
                 <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}
+                    style={[styles.addButton, { backgroundColor: cardBg }]}
                     onPress={() => navigation.navigate('VendorForm')}
                 >
                     <Plus color={primaryColor} size={24} />
@@ -232,60 +245,52 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Search Bar */}
-                <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
-                    <Search color={mutedColor} size={20} />
-                    <TextInput
-                        style={[styles.searchInput, { color: textColor }]}
-                        placeholder={t('search', language)}
-                        placeholderTextColor={mutedColor}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <X color={mutedColor} size={18} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Plain Stats HUD */}
-                <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: textColor }]}>{stats.totalVendors}</Text>
-                        <Text style={[styles.statLabel, { color: mutedColor }]}>VENDORS</Text>
-                    </View>
-                    <View style={styles.divider} />
-                    <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: '#ef4444' }]}>{formatCurrency(stats.totalExpenses)}</Text>
-                        <Text style={[styles.statLabel, { color: mutedColor }]}>EXPENSES</Text>
-                    </View>
-                    <View style={styles.divider} />
-                    <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: textColor }]}>{stats.withTaxId}</Text>
-                        <Text style={[styles.statLabel, { color: mutedColor }]}>WITH TAX ID</Text>
-                    </View>
+                {/* Stats */}
+                <View style={styles.statsContainer}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                        {renderStatCard('Vendors', stats.totalVendors, Building2, '#818cf8')}
+                        {renderStatCard('Shpenzime', formatCurrency(stats.totalExpenses), TrendingDown, '#ef4444')}
+                        {renderStatCard('Tatimore', stats.withTaxId, FileText, '#10b981')}
+                    </ScrollView>
                 </View>
 
                 {/* Filters */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-                    {cities.map((city, idx) => (
-                        <TouchableOpacity
-                            key={idx}
-                            onPress={() => setSelectedFilter(city === 'Të gjitha' ? null : city)}
-                            style={[
-                                styles.filterChip,
-                                { backgroundColor: cardBg, borderColor },
-                                ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: primaryColor, borderColor: primaryColor }
-                            ]}
-                        >
-                            <Text style={[
-                                styles.filterText,
-                                { color: ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) ? '#fff' : mutedColor }
-                            ]}>{city}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                <View>
+                    <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
+                        <Search color={mutedColor} size={20} />
+                        <TextInput
+                            style={[styles.searchInput, { color: textColor }]}
+                            placeholder={t('search', language)}
+                            placeholderTextColor={mutedColor}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <X color={mutedColor} size={18} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                        {cities.map((city, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                onPress={() => setSelectedFilter(city === 'Të gjitha' ? null : city)}
+                                style={[
+                                    styles.filterChip,
+                                    { backgroundColor: cardBg },
+                                    ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) && { backgroundColor: primaryColor }
+                                ]}
+                            >
+                                <Text style={[
+                                    styles.filterText,
+                                    { color: ((selectedFilter === null && city === 'Të gjitha') || selectedFilter === city) ? '#fff' : mutedColor }
+                                ]}>{city}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
 
                 {filteredVendors.length === 0 ? (
                     <View style={styles.emptyContainer}>
@@ -308,29 +313,44 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
-    titleLabel: { fontSize: 13, fontWeight: 'bold', letterSpacing: 1.2, marginBottom: 2 },
-    title: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     addButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
     scrollContent: { paddingBottom: 100 },
 
-    searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 10, paddingHorizontal: 16, height: 50, borderRadius: 14, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
+    // Stats
+    statsContainer: { marginBottom: 24 },
+    statsScroll: { paddingHorizontal: 20, gap: 12 },
+    statCard: {
+        minWidth: 140,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        gap: 8
+    },
+    statIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statValue: { fontSize: 18, fontWeight: 'bold' },
+    statLabel: { fontSize: 11, fontWeight: '500' },
 
-    statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 40, paddingVertical: 20 },
-    statItem: { alignItems: 'center' },
-    statValue: { fontSize: 20, fontWeight: '800' },
-    statLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, marginTop: 4 },
-    divider: { width: 1, height: 24, backgroundColor: 'rgba(148, 163, 184, 0.2)' },
+    // Search & Filters
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
+    searchInput: { flex: 1, fontSize: 16 },
 
-    filterScroll: { paddingHorizontal: 20, marginBottom: 20, gap: 8 },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+    filterScroll: { paddingHorizontal: 20, marginBottom: 16, gap: 8 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
     filterText: { fontSize: 13, fontWeight: '600' },
 
     listContainer: { paddingHorizontal: 20, gap: 12 },
 
-    vendorCard: { padding: 16, borderRadius: 16, marginVertical: 0 },
+    vendorCard: { padding: 16, borderRadius: 16 },
     vendorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     vendorInfo: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
@@ -343,13 +363,13 @@ const styles = StyleSheet.create({
     contactText: { fontSize: 12 },
     deleteButton: { padding: 4 },
 
-    vendorFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(148, 163, 184, 0.1)' },
-    expenseRow: {}, // Just container
-    expenseLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+    vendorFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
+    expenseRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+    expenseLabel: { fontSize: 11, fontWeight: '600' },
     expenseValue: { fontSize: 16, fontWeight: '700' },
 
     actionRow: { flexDirection: 'row', gap: 8 },
-    miniBtn: { width: 32, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    miniBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 15, fontWeight: '500' },

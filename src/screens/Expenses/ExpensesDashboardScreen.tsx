@@ -164,7 +164,7 @@ export function ExpensesDashboardScreen({ navigation }: any) {
                 activeOpacity={0.8}
                 onPress={onPress}
             >
-                <Card style={[styles.actionCard, { borderLeftColor: item.color, borderLeftWidth: 4 }]}>
+                <Card style={[styles.actionCard, { backgroundColor: cardBg }]}>
                     <View style={styles.actionCardContent}>
                         <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
                             <Icon color={item.color} size={24} />
@@ -184,7 +184,8 @@ export function ExpensesDashboardScreen({ navigation }: any) {
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.title, { color: textColor }]}>{t('expenses', language)}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('expensesDashboard', language)}</Text>
                 </View>
                 <View style={[styles.headerIcon, { backgroundColor: `${primaryColor}15` }]}>
                     <Wallet color={primaryColor} size={24} />
@@ -305,7 +306,8 @@ const styles = StyleSheet.create({
         paddingTop: 60,
         paddingBottom: 16
     },
-    title: { fontSize: 28, fontWeight: 'bold' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     headerIcon: {
         width: 48,
         height: 48,

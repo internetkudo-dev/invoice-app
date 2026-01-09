@@ -209,40 +209,38 @@ export function CustomerLedgerScreen({ navigation, route }: any) {
     <meta charset="UTF-8">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; font-size: 11px; }
-        .header { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid ${primaryColor}; }
-        .company-name { font-size: 18px; font-weight: bold; color: #1e293b; }
-        .title { font-size: 20px; font-weight: bold; color: ${primaryColor}; text-align: right; }
-        .client-section { background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .client-name { font-size: 14px; font-weight: bold; color: #1e293b; margin-bottom: 5px; }
-        .client-details { color: #64748b; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; font-size: 11px; color: #000; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #000; }
+        .company-name { font-size: 18px; font-weight: bold; color: #000; }
+        .title { font-size: 20px; font-weight: bold; color: #000; text-align: right; }
+        .client-section { background: #fff; border: 1px solid #000; padding: 15px; border-radius: 0; margin-bottom: 20px; }
+        .client-name { font-size: 14px; font-weight: bold; color: #000; margin-bottom: 5px; }
+        .client-details { color: #000; }
         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th { background: ${primaryColor}; color: white; padding: 10px 8px; text-align: left; font-weight: 600; }
+        th { background: #000; color: white; padding: 10px 8px; text-align: left; font-weight: 600; border: 1px solid #000; }
         th:nth-child(3), th:nth-child(4), th:nth-child(5) { text-align: right; }
-        td { padding: 8px; border-bottom: 1px solid #e2e8f0; }
-        td.debit, td.credit, td.balance { text-align: right; font-family: monospace; }
-        td.debit { color: #ef4444; }
-        td.credit { color: #10b981; }
+        td { padding: 8px; border: 1px solid #000; }
+        td.debit, td.credit, td.balance { text-align: right; font-family: monospace; color: #000; }
         td.balance { font-weight: bold; }
-        tr:nth-child(even) { background: #f8fafc; }
-        .totals { margin-top: 10px; padding: 15px; background: #1e293b; border-radius: 8px; color: white; }
+        tr:nth-child(even) { background: #fff; }
+        .totals { margin-top: 10px; padding: 15px; background: #fff; border: 2px solid #000; color: #000; }
         .totals-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .totals-row:last-child { margin-bottom: 0; font-size: 14px; font-weight: bold; border-top: 1px solid #475569; padding-top: 8px; }
-        .footer { margin-top: 30px; text-align: center; color: #94a3b8; font-size: 10px; }
+        .totals-row:last-child { margin-bottom: 0; font-size: 14px; font-weight: bold; border-top: 1px solid #000; padding-top: 8px; }
+        .footer { margin-top: 30px; text-align: center; color: #000; font-size: 10px; }
     </style>
 </head>
 <body>
     <div class="header">
         <div>
             <div class="company-name">${profile?.company_name || 'Company'}</div>
-            <div style="color: #64748b; margin-top: 5px;">
+            <div style="color: #000; margin-top: 5px;">
                 ${profile?.address || ''}<br/>
                 ${profile?.phone || ''} | ${profile?.email || ''}
             </div>
         </div>
         <div>
             <div class="title">KARTELA E BLERËSIT</div>
-            <div style="color: #64748b; text-align: right; margin-top: 5px;">
+            <div style="color: #000; text-align: right; margin-top: 5px;">
                 Data: ${new Date().toLocaleDateString('sq-AL')}
             </div>
         </div>

@@ -1,39 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Image, Switch, Platform } from 'react-native';
-import { DollarSign, Percent, ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X, Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages, ShieldCheck, FileText, Trash2, Github, Briefcase, Users, Layout, Plus, Mail, Building, ArrowLeft, User, Zap, Settings } from 'lucide-react-native';
+import {
+    ChevronRight, Moon, Sun, Smartphone, Camera, Upload, Download, X,
+    Image as ImageIcon, PenTool, Stamp, Palette, CreditCard, Languages,
+    ShieldCheck, FileText, Briefcase, Users, Mail, Building, ArrowLeft,
+    User, Zap, Settings, LogOut
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Clipboard from 'expo-clipboard';
+import { SvgXml } from 'react-native-svg';
+
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, Input, SignaturePadModal } from '../../components/common';
-import { SvgXml } from 'react-native-svg';
 import { Profile } from '../../types';
 import { t } from '../../i18n';
 
-const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'ALL'];
 const languages = [
     { code: 'en', label: 'English' },
-    { code: 'de', label: 'German' },
-    { code: 'fr', label: 'French' },
-    { code: 'es', label: 'Spanish' },
-    { code: 'it', label: 'Italian' },
     { code: 'sq', label: 'Albanian' },
 ];
 
-const companyColors = [
+const appColors = [
     '#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4', '#1e293b'
 ];
 
 export function SettingsScreen({ navigation }: any) {
-    const { user } = useAuth();
+    const { user, signOut } = useAuth();
     const { themeMode, setThemeMode, isDark, primaryColor, setPrimaryColor, language, setLanguage } = useTheme();
-    const [loading, setLoading] = useState(false);
-    const [joinId, setJoinId] = useState('');
     const [profile, setProfile] = useState<Profile>({
         id: user?.id || '',
         company_name: '',
@@ -50,14 +46,14 @@ export function SettingsScreen({ navigation }: any) {
         is_grayscale: false,
         updated_at: new Date().toISOString(),
     });
-    const [activeSection, setActiveSection] = useState<string | null>('company');
+    const [activeSection, setActiveSection] = useState<string | null>('personal');
     const [showSignaturePad, setShowSignaturePad] = useState(false);
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const accentBg = isDark ? '#1e293b' : '#f1f5f9';
+    const accentBg = isDark ? '#334155' : '#f1f5f9';
 
     useEffect(() => {
         fetchProfile();
@@ -78,53 +74,53 @@ export function SettingsScreen({ navigation }: any) {
         }
     };
 
-    const handleSave = async () => {
-        setLoading(true);
+    const updateProfile = async (updates: Partial<Profile>) => {
+        // Optimistic update
+        setProfile(prev => ({ ...prev, ...updates }));
+
+        // Global state updates
+        if (updates.primary_color) setPrimaryColor(updates.primary_color);
+        if (updates.invoice_language) setLanguage(updates.invoice_language);
+
         try {
-            // Save user-specific settings to profiles
-            const { error: profileError } = await supabase.from('profiles').update({
-                biometric_enabled: profile.biometric_enabled,
-                invoice_language: profile.invoice_language,
-                primary_color: profile.primary_color,
-                updated_at: new Date().toISOString()
-            }).eq('id', user?.id);
+            // Determine if we are updating profile or company fields
+            let profileUpdates: any = {};
+            let companyUpdates: any = {};
+            const profileKeys = ['biometric_enabled', 'invoice_language', 'primary_color', 'default_client_discount'];
 
-            if (profileError) throw profileError;
+            Object.keys(updates).forEach(key => {
+                if (profileKeys.includes(key)) {
+                    profileUpdates[key] = (updates as any)[key];
+                } else if (profile.active_company_id) {
+                    companyUpdates[key] = (updates as any)[key];
+                } else {
+                    // If no company, everything goes to profile (fallback)
+                    profileUpdates[key] = (updates as any)[key];
+                }
+            });
 
-            // Save company-specific settings
-            if (profile.active_company_id) {
-                // Exclude fields that belong only to profile or are IDs
-                const {
-                    id, active_company_id, biometric_enabled, role,
-                    invoice_language, primary_color, updated_at, company_id,
-                    default_client_discount,
-                    ...companyFields
-                } = profile;
-
-                const { error: companyError } = await supabase
-                    .from('companies')
-                    .update(companyFields)
-                    .eq('id', profile.active_company_id);
-
-                if (companyError) throw companyError;
-            } else {
-                // Fallback for non-multi-company users
-                const { error } = await supabase.from('profiles').upsert({
-                    ...profile,
+            // Update Profile Table
+            if (Object.keys(profileUpdates).length > 0) {
+                const { error: pErr } = await supabase.from('profiles').update({
+                    ...profileUpdates,
                     updated_at: new Date().toISOString()
-                });
-                if (error) throw error;
+                }).eq('id', user?.id);
+                if (pErr) throw pErr;
             }
 
-            setPrimaryColor(profile.primary_color);
-            if (profile.invoice_language) setLanguage(profile.invoice_language);
-            Alert.alert(t('save', language), 'OK');
+            // Update Company Table if applicable
+            if (profile.active_company_id && Object.keys(companyUpdates).length > 0) {
+                const { error: cErr } = await supabase.from('companies').update({
+                    ...companyUpdates
+                }).eq('id', profile.active_company_id);
+                if (cErr) throw cErr;
+            }
+
         } catch (error: any) {
-            Alert.alert('Error', error.message);
-        } finally {
-            setLoading(false);
+            console.error('Error auto-saving:', error);
         }
     };
+
 
     const pickImage = async (type: 'logo' | 'signature' | 'stamp') => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -137,131 +133,24 @@ export function SettingsScreen({ navigation }: any) {
 
         if (!result.canceled && result.assets[0].base64) {
             const base64 = `data:image/png;base64,${result.assets[0].base64}`;
-            setProfile(prev => ({ ...prev, [`${type}_url`]: base64 }));
+            const field = `${type}_url` as keyof Profile;
+            updateProfile({ [field]: base64 });
         }
-    };
-
-    const handleExportData = async (format: 'json' | 'csv') => {
-        try {
-            const companyId = profile.active_company_id || profile.company_id || user?.id;
-
-            // Fetch all data for complete backup
-            const [
-                { data: invoices },
-                { data: invoiceItems },
-                { data: clients },
-                { data: products },
-                { data: expenses },
-                { data: payments }
-            ] = await Promise.all([
-                supabase.from('invoices').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
-                supabase.from('invoice_items').select('*'),
-                supabase.from('clients').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
-                supabase.from('products').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
-                supabase.from('expenses').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`),
-                supabase.from('payments').select('*').or(`user_id.eq.${user?.id},company_id.eq.${companyId}`)
-            ]);
-
-            if (format === 'json') {
-                // Full JSON backup with all data
-                const backupData = {
-                    exportDate: new Date().toISOString(),
-                    version: '2.0.0',
-                    invoices: invoices || [],
-                    invoiceItems: invoiceItems || [],
-                    clients: clients || [],
-                    products: products || [],
-                    expenses: expenses || [],
-                    payments: payments || []
-                };
-                const content = JSON.stringify(backupData, null, 2);
-                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
-                const fileUri = `${folder}invoice_app_backup_${new Date().toISOString().split('T')[0]}.json`;
-                await FileSystem.writeAsStringAsync(fileUri, content);
-                await Sharing.shareAsync(fileUri);
-            } else {
-                // CSV export for accountant - invoices with totals
-                const csvHeader = 'Date,Invoice Number,Client Name,Subtotal,Tax,Discount,Total,Status,Payment Method\n';
-                const csvRows = invoices?.map(inv => {
-                    const client = clients?.find(c => c.id === inv.client_id);
-                    return `${inv.issue_date},${inv.invoice_number},"${client?.name || 'Guest'}",${inv.subtotal || 0},${inv.tax_amount || 0},${inv.discount_amount || 0},${inv.total_amount},${inv.status},${inv.payment_method || 'N/A'}`;
-                }).join('\n') || '';
-
-                const content = csvHeader + csvRows;
-                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
-                const fileUri = `${folder}invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
-                await FileSystem.writeAsStringAsync(fileUri, content);
-                await Sharing.shareAsync(fileUri);
-            }
-
-            Alert.alert('Success', `Data exported successfully as ${format.toUpperCase()}`);
-        } catch (error) {
-            Alert.alert('Error', 'Failed to export data');
-        }
-    };
-
-    const handleBiometricToggle = async (value: boolean) => {
-        const hasHardware = await LocalAuthentication.hasHardwareAsync();
-        if (!hasHardware) {
-            Alert.alert('Not Supported', 'Your device does not support biometrics.');
-            return;
-        }
-        setProfile({ ...profile, biometric_enabled: value });
     };
 
     const copyCompanyId = async () => {
         const id = profile.active_company_id || profile.company_id || user?.id;
         if (id) {
             await Clipboard.setStringAsync(id);
-            Alert.alert('Copied', 'Company ID copied to clipboard. Share this with your team.');
+            Alert.alert('Copied', 'Company ID copied to clipboard.');
         }
-    };
-
-    const joinCompany = async (compId: string) => {
-        if (!compId.trim()) return;
-        Alert.alert(
-            'Join Company',
-            'Are you sure you want to join this company? You will see their invoices and your role will be "worker".',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Join',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const { error } = await supabase.from('profiles').update({
-                                company_id: compId,
-                                role: 'worker'
-                            }).eq('id', user?.id);
-                            if (error) throw error;
-                            fetchProfile();
-                            Alert.alert('Success', 'Joined company successfully');
-                        } catch (err) {
-                            Alert.alert('Error', 'Failed to join company. Check if ID is valid.');
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
     };
 
     const renderHeader = (title: string, Icon: any, section: string, color: string) => {
         const isActive = activeSection === section;
-        const borderColor = isDark ? '#334155' : '#e2e8f0';
-
         return (
             <TouchableOpacity
-                style={[
-                    styles.sectionHeader,
-                    {
-                        backgroundColor: cardBg,
-                        borderColor: isActive ? color : borderColor,
-                        borderLeftColor: color,
-                        borderLeftWidth: 4
-                    }
-                ]}
+                style={[styles.sectionHeader, { backgroundColor: cardBg }]}
                 onPress={() => setActiveSection(isActive ? null : section)}
             >
                 <View style={styles.sectionHeaderLeft}>
@@ -279,70 +168,137 @@ export function SettingsScreen({ navigation }: any) {
         );
     };
 
-    const businessLogo = profile.logo_url;
-
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
-                        <ArrowLeft color={textColor} size={24} />
-                    </TouchableOpacity>
-                    <Text style={[styles.title, { color: textColor }]}>{t('businessSettings', language) || 'Business Settings'}</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ArrowLeft color={textColor} size={24} />
+                </TouchableOpacity>
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('settings', language) || 'Configuration'}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('businessSettings', language) || 'Settings'}</Text>
                 </View>
-                <Button title={t('save', language)} onPress={handleSave} loading={loading} size="small" />
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-                {/* Business Info Overview */}
-                <Card style={styles.businessCard}>
-                    <View style={[styles.businessLogo, { backgroundColor: primaryColor + '20' }]}>
-                        {businessLogo ? (
-                            <Image source={{ uri: businessLogo }} style={styles.logoImage} />
-                        ) : (
-                            <Building color={primaryColor} size={32} />
-                        )}
+                {/* User Info Overview (Merged from Profile) */}
+                <Card style={[styles.userCard, { backgroundColor: cardBg }]}>
+                    <View style={styles.userAvatar}>
+                        <Text style={styles.avatarText}>{user?.email?.charAt(0).toUpperCase()}</Text>
                     </View>
-                    <View style={styles.businessDetails}>
-                        <Text style={[styles.businessName, { color: textColor }]}>{profile.company_name || 'My Business'}</Text>
-                        <Text style={[styles.businessId, { color: mutedColor }]}>ID: {profile.active_company_id || profile.company_id || user?.id?.substring(0, 8)}</Text>
+                    <View style={styles.userDetails}>
+                        <Text style={[styles.userName, { color: textColor }]}>{user?.email?.split('@')[0]}</Text>
+                        <Text style={[styles.userEmail, { color: mutedColor }]}>{user?.email}</Text>
                     </View>
                 </Card>
 
-                <Button
-                    title="Profile & Personalization"
-                    variant="shortcut"
-                    icon={User}
-                    onPress={() => navigation.navigate('Profile')}
-                    style={{ marginBottom: 12 }}
-                />
+                {/* Personal Settings (Merged from Profile) */}
+                {renderHeader(t('language', language), Languages, 'personal', primaryColor)}
+                {activeSection === 'personal' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.label, { color: textColor }]}>{t('appLanguage', language) || 'App Language'}</Text>
+                        <View style={styles.grid}>
+                            {languages.map(lang => (
+                                <TouchableOpacity
+                                    key={lang.code}
+                                    style={[
+                                        styles.optionChip,
+                                        { backgroundColor: accentBg, flex: 1 },
+                                        profile.invoice_language === lang.code && { backgroundColor: primaryColor }
+                                    ]}
+                                    onPress={() => updateProfile({ invoice_language: lang.code })}
+                                >
+                                    <Text style={[
+                                        styles.optionText,
+                                        { color: textColor },
+                                        profile.invoice_language === lang.code && { color: '#fff' }
+                                    ]}>{lang.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </Card>
+                )}
 
-                <Button
-                    title="Advanced Settings (SMTP, Stripe...)"
-                    variant="shortcut"
-                    icon={Zap}
+                {/* Appearance (Merged from Profile) */}
+                {renderHeader(t('appTheme', language), Palette, 'appearance', primaryColor)}
+                {activeSection === 'appearance' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.label, { color: textColor }]}>{t('appTheme', language)}</Text>
+                        <View style={styles.grid}>
+                            {[
+                                { label: t('systemTheme', language), value: 'system', icon: Smartphone },
+                                { label: t('lightMode', language), value: 'light', icon: Sun },
+                                { label: t('darkMode', language), value: 'dark', icon: Moon },
+                            ].map(mode => (
+                                <TouchableOpacity
+                                    key={mode.value}
+                                    style={[
+                                        styles.optionChip,
+                                        { backgroundColor: accentBg, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center' },
+                                        themeMode === mode.value && { backgroundColor: primaryColor }
+                                    ]}
+                                    onPress={() => setThemeMode(mode.value as any)}
+                                >
+                                    {React.createElement(mode.icon, { size: 16, color: themeMode === mode.value ? '#fff' : textColor })}
+                                    <Text style={[
+                                        styles.optionText,
+                                        { color: textColor },
+                                        themeMode === mode.value && { color: '#fff' }
+                                    ]}>{mode.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <View style={styles.divider} />
+                        <Text style={[styles.label, { color: textColor }]}>Brand / Accent Color</Text>
+                        <View style={styles.colorGrid}>
+                            {appColors.map(color => (
+                                <TouchableOpacity
+                                    key={color}
+                                    style={[
+                                        styles.colorOption,
+                                        { backgroundColor: color },
+                                        profile.primary_color === color && { borderColor: textColor, borderWidth: 3 }
+                                    ]}
+                                    onPress={() => updateProfile({ primary_color: color })}
+                                />
+                            ))}
+                        </View>
+                    </Card>
+                )}
+
+                {/* Advanced Settings Link */}
+                <TouchableOpacity
+                    style={[styles.sectionHeader, { backgroundColor: cardBg }]}
                     onPress={() => navigation.navigate('AdvancedSettings')}
-                    style={{ marginBottom: 24 }}
-                />
+                >
+                    <View style={styles.sectionHeaderLeft}>
+                        <View style={[styles.sectionIcon, { backgroundColor: primaryColor + '15' }]}>
+                            <Zap color={primaryColor} size={20} />
+                        </View>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Advanced Settings</Text>
+                    </View>
+                    <ChevronRight color={mutedColor} size={20} />
+                </TouchableOpacity>
 
                 {/* Company Info */}
                 {renderHeader(t('companyProfile', language), Briefcase, 'company', primaryColor)}
                 {activeSection === 'company' && (
                     <Card style={styles.sectionContent}>
-                        <Input label="Company Name" value={profile.company_name} onChangeText={(t) => setProfile({ ...profile, company_name: t })} />
-                        <Input label="Tax ID / Registration" value={profile.tax_id} onChangeText={(t) => setProfile({ ...profile, tax_id: t })} />
-                        <Input label="Email" value={profile.email} onChangeText={(t) => setProfile({ ...profile, email: t })} keyboardType="email-address" />
-                        <Input label="Phone" value={profile.phone} onChangeText={(t) => setProfile({ ...profile, phone: t })} keyboardType="phone-pad" />
-                        <Input label="Address" value={profile.address} onChangeText={(t) => setProfile({ ...profile, address: t })} multiline />
+                        <Input label="Company Name" value={profile.company_name} onChangeText={(t) => setProfile({ ...profile, company_name: t })} onEndEditing={() => updateProfile({ company_name: profile.company_name })} />
+                        <Input label="Tax ID / Registration" value={profile.tax_id} onChangeText={(t) => setProfile({ ...profile, tax_id: t })} onEndEditing={() => updateProfile({ tax_id: profile.tax_id })} />
+                        <Input label="Email" value={profile.email} onChangeText={(t) => setProfile({ ...profile, email: t })} onEndEditing={() => updateProfile({ email: profile.email })} keyboardType="email-address" />
+                        <Input label="Phone" value={profile.phone} onChangeText={(t) => setProfile({ ...profile, phone: t })} onEndEditing={() => updateProfile({ phone: profile.phone })} keyboardType="phone-pad" />
+                        <Input label="Address" value={profile.address} onChangeText={(t) => setProfile({ ...profile, address: t })} onEndEditing={() => updateProfile({ address: profile.address })} multiline />
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             <View style={{ flex: 1 }}>
-                                <Input label="City" value={profile.city} onChangeText={(t) => setProfile({ ...profile, city: t })} />
+                                <Input label="City" value={profile.city} onChangeText={(t) => setProfile({ ...profile, city: t })} onEndEditing={() => updateProfile({ city: profile.city })} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Input label="Country" value={profile.country} onChangeText={(t) => setProfile({ ...profile, country: t })} />
+                                <Input label="Country" value={profile.country} onChangeText={(t) => setProfile({ ...profile, country: t })} onEndEditing={() => updateProfile({ country: profile.country })} />
                             </View>
                         </View>
-                        <Input label="Website" value={profile.website} onChangeText={(t) => setProfile({ ...profile, website: t })} placeholder="www.example.com" />
+                        <Input label="Website" value={profile.website} onChangeText={(t) => setProfile({ ...profile, website: t })} onEndEditing={() => updateProfile({ website: profile.website })} placeholder="www.example.com" />
                     </Card>
                 )}
 
@@ -350,84 +306,28 @@ export function SettingsScreen({ navigation }: any) {
                 {renderHeader('Logos & Signatures', Camera, 'visuals', primaryColor)}
                 {activeSection === 'visuals' && (
                     <Card style={styles.sectionContent}>
-                        <AssetPicker label="Company Logo" value={profile.logo_url} onPick={() => pickImage('logo')} onClear={() => setProfile({ ...profile, logo_url: '' })} icon={ImageIcon} isDark={isDark} />
+                        <AssetPicker label="Company Logo" value={profile.logo_url} onPick={() => pickImage('logo')} onClear={() => updateProfile({ logo_url: '' })} icon={ImageIcon} isDark={isDark} />
                         <AssetPicker
                             label="Signature"
                             value={profile.signature_url}
                             onPick={() => pickImage('signature')}
-                            onClear={() => setProfile({ ...profile, signature_url: '' })}
+                            onClear={() => updateProfile({ signature_url: '' })}
                             onDraw={() => setShowSignaturePad(true)}
                             icon={PenTool}
                             isDark={isDark}
                         />
-                        <AssetPicker label="Official Stamp" value={profile.stamp_url} onPick={() => pickImage('stamp')} onClear={() => setProfile({ ...profile, stamp_url: '' })} icon={Stamp} isDark={isDark} />
+                        <AssetPicker label="Official Stamp" value={profile.stamp_url} onPick={() => pickImage('stamp')} onClear={() => updateProfile({ stamp_url: '' })} icon={Stamp} isDark={isDark} />
                     </Card>
                 )}
 
-                {/* Bank Details only */}
+                {/* Bank Details */}
                 {renderHeader(t('bankDetails', language), CreditCard, 'payments', primaryColor)}
                 {activeSection === 'payments' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>Bank Details (Apps on PDF)</Text>
-                        <Input label="Bank Name" value={profile.bank_name} onChangeText={(t) => setProfile({ ...profile, bank_name: t })} />
-                        <Input label="IBAN" value={profile.bank_iban} onChangeText={(t) => setProfile({ ...profile, bank_iban: t })} />
-                        <Input label="SWIFT/BIC" value={profile.bank_swift} onChangeText={(t) => setProfile({ ...profile, bank_swift: t })} />
-                    </Card>
-                )}
-
-                {/* App Appearance & Layout Settings (Business Related) */}
-                {renderHeader('Document Layout', Layout, 'appearance', primaryColor)}
-                {activeSection === 'appearance' && (
-                    <Card style={styles.sectionContent}>
-                        <Text style={[styles.label, { color: textColor }]}>Default Terms & Conditions</Text>
-                        <Input value={profile.terms_conditions} onChangeText={(t) => setProfile({ ...profile, terms_conditions: t })} multiline numberOfLines={4} placeholder="Payment is due within 30 days..." />
-
-                        <View style={styles.divider} />
-                        <Text style={[styles.label, { color: textColor }]}>Default Paper Size</Text>
-                        <View style={styles.langGrid}>
-                            {['A4', 'A5', 'Receipt'].map(size => (
-                                <TouchableOpacity
-                                    key={size}
-                                    style={[
-                                        styles.langOption,
-                                        { backgroundColor: accentBg, flex: 1, alignItems: 'center' },
-                                        profile.template_config?.pageSize === size && { backgroundColor: primaryColor }
-                                    ]}
-                                    onPress={() => setProfile({
-                                        ...profile,
-                                        template_config: {
-                                            ...(profile.template_config || { showLogo: true, showSignature: true, showBuyerSignature: true, showStamp: true, visibleColumns: { sku: true, unit: true, tax: true, quantity: true, price: true }, labels: {} }),
-                                            pageSize: size as any
-                                        }
-                                    })}
-                                >
-                                    <Text style={[styles.langText, { color: textColor }, profile.template_config?.pageSize === size && { color: '#fff' }]}>{size}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <View style={styles.divider} />
-                        <Button
-                            title="Invoice Design & Style"
-                            variant="shortcut"
-                            icon={Layout}
-                            onPress={() => navigation.navigate('TemplateEditor')}
-                            style={{ marginTop: 8 }}
-                        />
-                        <Button
-                            title="Contract Templates"
-                            variant="shortcut"
-                            icon={FileText}
-                            onPress={() => navigation.navigate('ContractTemplates')}
-                            style={{ marginTop: 8 }}
-                        />
-                        <Button
-                            title="Invoice Fields & Defaults"
-                            variant="shortcut"
-                            icon={Settings}
-                            onPress={() => navigation.navigate('InvoiceTemplateSettings')}
-                            style={{ marginTop: 8 }}
-                        />
+                        <Input label="Bank Name" value={profile.bank_name} onChangeText={(t) => setProfile({ ...profile, bank_name: t })} onEndEditing={() => updateProfile({ bank_name: profile.bank_name })} />
+                        <Input label="IBAN" value={profile.bank_iban} onChangeText={(t) => setProfile({ ...profile, bank_iban: t })} onEndEditing={() => updateProfile({ bank_iban: profile.bank_iban })} />
+                        <Input label="SWIFT/BIC" value={profile.bank_swift} onChangeText={(t) => setProfile({ ...profile, bank_swift: t })} onEndEditing={() => updateProfile({ bank_swift: profile.bank_swift })} />
                     </Card>
                 )}
 
@@ -449,43 +349,58 @@ export function SettingsScreen({ navigation }: any) {
 
                         <View style={styles.divider} />
 
-                        <Text style={[styles.label, { color: textColor }]}>Invite Team Member</Text>
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Input
-                                    label="Your Company ID"
-                                    value={profile.company_id || user?.id}
-                                    editable={false}
-                                />
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.smallActionBtn, { backgroundColor: primaryColor, marginLeft: 8, height: 50, marginTop: 4 }]}
-                                onPress={copyCompanyId}
-                            >
-                                <Mail color="#fff" size={20} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.divider} />
-
+                        <Input
+                            label="Your Company ID"
+                            value={profile.company_id || user?.id}
+                            editable={false}
+                        />
                         <Button
                             title="Manage Companies"
                             variant="shortcut"
                             icon={Building}
                             onPress={() => navigation.navigate('ManageCompanies')}
-                            style={{ marginBottom: 16 }}
+                            style={{ marginTop: 8 }}
                         />
                     </Card>
                 )}
 
+                {/* Security (Merged from Profile) */}
+                {renderHeader(t('security', language) || 'Security', ShieldCheck, 'security', primaryColor)}
+                {activeSection === 'security' && (
+                    <Card style={styles.sectionContent}>
+                        <View style={styles.rowBetween}>
+                            <View style={{ flex: 1, marginRight: 16 }}>
+                                <Text style={[styles.label, { color: textColor }]}>Biometric Lock</Text>
+                                <Text style={[styles.hint, { color: mutedColor }]}>Requires FaceID/Fingerprint to open.</Text>
+                            </View>
+                            <Switch
+                                value={profile.biometric_enabled}
+                                onValueChange={(val) => updateProfile({ biometric_enabled: val })}
+                                trackColor={{ false: '#767577', true: primaryColor }}
+                                thumbColor={'#f4f3f4'}
+                            />
+                        </View>
+                    </Card>
+                )}
+
+
+
+
                 <View style={styles.footer}>
+                    <Button
+                        title={t('signOut', language)}
+                        variant="danger"
+                        onPress={signOut}
+                        icon={LogOut}
+                        style={{ width: '100%' }}
+                    />
                     <Text style={[styles.version, { color: mutedColor }]}>Invoice App v2.0.0</Text>
                 </View>
             </ScrollView>
             <SignaturePadModal
                 visible={showSignaturePad}
                 onClose={() => setShowSignaturePad(false)}
-                onSave={(sig) => setProfile(prev => ({ ...prev, signature_url: sig }))}
+                onSave={(sig) => updateProfile({ signature_url: sig })}
                 primaryColor={primaryColor}
             />
         </View >
@@ -539,34 +454,41 @@ function AssetPicker({ label, value, onPick, onClear, onDraw, icon, isDark }: an
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    title: { fontSize: 28, fontWeight: 'bold' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
+
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 60 },
+    scrollContent: { padding: 16, paddingBottom: 40 },
+
+    userCard: { flexDirection: 'row', alignItems: 'center', padding: 20, marginBottom: 24, borderRadius: 16 },
+    userAvatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#818cf8', alignItems: 'center', justifyContent: 'center' },
+    avatarText: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
+    userDetails: { marginLeft: 16 },
+    userName: { fontSize: 18, fontWeight: 'bold' },
+    userEmail: { fontSize: 14, marginTop: 2 },
+
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 16,
-        borderRadius: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2
+        borderRadius: 14,
+        marginBottom: 10,
     },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
     sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '700' },
-    sectionContent: { padding: 20, borderRadius: 20, marginTop: -8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+    sectionTitle: { fontSize: 16, fontWeight: '600' },
+
+    sectionContent: { padding: 20, borderRadius: 20, marginTop: -6, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+
     label: { fontSize: 14, fontWeight: 'bold', marginBottom: 12 },
     subLabel: { fontSize: 12, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase' },
     divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 16 },
     row: { flexDirection: 'row', alignItems: 'center' },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    hint: { fontSize: 13, marginTop: 4 },
+    hint: { fontSize: 12, marginTop: 4 },
     colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
     colorOption: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: 'transparent' },
     langGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
@@ -588,13 +510,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    businessCard: { flexDirection: 'row', alignItems: 'center', padding: 20, marginBottom: 24 },
-    businessLogo: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    logoImage: { width: '100%', height: '100%' },
-    businessDetails: { marginLeft: 16 },
-    businessName: { fontSize: 20, fontWeight: 'bold' },
-    businessId: { fontSize: 12, marginTop: 4 },
-    profileShortcut: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 24 },
-    shortcutIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    shortcutTitleLabel: { flex: 1, fontWeight: 'bold', fontSize: 14 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    optionChip: { paddingHorizontal: 12, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+    optionText: { fontSize: 13, fontWeight: '600' },
 });

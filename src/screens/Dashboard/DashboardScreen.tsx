@@ -9,7 +9,7 @@ import {
     Dimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Briefcase, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Users, Package, FileText, BarChart2, QrCode, AlertTriangle, Calendar, Clock, Receipt, ScanLine, User, Settings, ChevronRight, ShoppingCart, CreditCard } from 'lucide-react-native';
+import { Briefcase, ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, Users, Package, FileText, BarChart2, QrCode, AlertTriangle, Calendar, Clock, Receipt, ScanLine, User, Settings, ChevronRight, ShoppingCart, CreditCard, Eye, EyeOff } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
@@ -58,6 +58,8 @@ export function DashboardScreen({ navigation }: any) {
         pendingPayouts: 0,
         isConnected: false
     });
+    const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState<{ month: string; revenue: number; expenses: number } | null>(null);
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -174,6 +176,10 @@ export function DashboardScreen({ navigation }: any) {
                     last6Months.push({ month: monthsNames[monthIdx], revenue: rev, expenses: exp });
                 }
                 setMonthlyStats(last6Months);
+                // Select the last month by default (current month)
+                if (last6Months.length > 0) {
+                    setSelectedMonth(last6Months[last6Months.length - 1]);
+                }
 
                 // Most sold products
                 const productSales: any = {};
@@ -216,16 +222,49 @@ export function DashboardScreen({ navigation }: any) {
         setRefreshing(false);
     };
 
-    const maxVal = Math.max(...monthlyStats.map(m => Math.max(m.revenue, m.expenses)), 1);
+    const maxVal = Math.max(...monthlyStats.map(m => Math.max(m.revenue, m.expenses)), 100); // Minimum 100 to avoid div by zero issues visually
+
+    const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
+        const Icon = icon;
+
+        // Simple heuristic: if value is a string and contains currency symbols
+        const isMoney = (typeof value === 'string' && (value.includes('€') || value.includes('$') || value.includes('£') || value.includes('Lek')));
+        const finalValue = (isPrivacyMode && isMoney) ? '****' : value;
+
+        return (
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                <View style={[styles.statIcon, { backgroundColor: color + '15', alignSelf: 'flex-start' }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <View style={{ marginTop: 12 }}>
+                    <Text style={[styles.statValue, { color: textColor }]}>{finalValue}</Text>
+                    <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
+                </View>
+            </View>
+        );
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.welcome, { color: mutedColor }]}>{t('welcomeBack', language)},</Text>
-                    <Text style={[styles.companyName, { color: textColor }]}>{profile?.company_name || 'My Business'}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('welcomeBack', language)},</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Text style={[styles.title, { color: textColor }]}>{profile?.company_name || 'My Business'}</Text>
+                        <TouchableOpacity onPress={() => setIsPrivacyMode(!isPrivacyMode)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            {isPrivacyMode ? (
+                                <EyeOff color={mutedColor} size={20} />
+                            ) : (
+                                <Eye color={mutedColor} size={20} />
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                {/* Actions removed from top right as they are now shortcuts below */}
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })} style={[styles.iconButton, { backgroundColor: cardBg }]}>
+                        <Settings color={isDark ? '#fff' : '#1e293b'} size={24} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView
@@ -233,45 +272,18 @@ export function DashboardScreen({ navigation }: any) {
                 contentContainerStyle={styles.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />}
             >
-                {/* Section 1: Daily Reports */}
-                <View style={styles.sectionHeader}>
-                    <View style={styles.sectionTitleRow}>
-                        <Calendar color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('dailyReports', language)}</Text>
-                    </View>
+                {/* Unified Stats Row - similar to HR Dashboard */}
+                <View style={styles.statsRow}>
+                    {renderStatCard(t('todayRevenue', language), formatCurrency(todayStats.revenue), TrendingUp, '#6366f1')}
+                    {renderStatCard(t('todayInvoices', language), todayStats.invoiceCount, Receipt, '#10b981')}
+                    {renderStatCard(t('pending', language), formatCurrency(stats.pending), Clock, '#f59e0b')}
                 </View>
 
-                <View style={[styles.dailyReportsGrid, { gap: 12 }]}>
-                    <Card style={[styles.dailyCard, { borderLeftColor: primaryColor, borderLeftWidth: 4 }]}>
-                        <View style={styles.dailyCardContent}>
-                            <View style={[styles.dailyIconContainer, { backgroundColor: `${primaryColor}15` }]}>
-                                <TrendingUp color={primaryColor} size={24} />
-                            </View>
-                            <View>
-                                <Text style={[styles.dailyCardLabel, { color: mutedColor }]}>{t('todayRevenue', language)}</Text>
-                                <Text style={[styles.dailyCardValue, { color: textColor }]}>{formatCurrency(todayStats.revenue)}</Text>
-                            </View>
-                        </View>
-                    </Card>
-
-                    <Card style={[styles.dailyCard, { borderLeftColor: '#10b981', borderLeftWidth: 4 }]}>
-                        <View style={styles.dailyCardContent}>
-                            <View style={[styles.dailyIconContainer, { backgroundColor: '#10b98115' }]}>
-                                <Receipt color="#10b981" size={24} />
-                            </View>
-                            <View>
-                                <Text style={[styles.dailyCardLabel, { color: mutedColor }]}>{t('todayInvoices', language)}</Text>
-                                <Text style={[styles.dailyCardValue, { color: textColor }]}>{todayStats.invoiceCount}</Text>
-                            </View>
-                        </View>
-                    </Card>
-                </View>
-
-                {/* Status Row */}
-                <View style={styles.statusRow}>
-                    <StatusItem label={t('paid', language)} value={formatCurrency(stats.paid)} color="#10b981" bgColor="#10b98120" />
-                    <StatusItem label={t('pending', language)} value={formatCurrency(stats.pending)} color="#f59e0b" bgColor="#f59e0b20" />
-                    <StatusItem label={t('overdue', language)} value={formatCurrency(stats.overdue)} color="#ef4444" bgColor="#ef444420" />
+                {/* Secondary Stats Row - for better overview */}
+                <View style={[styles.statsRow, { marginTop: 0 }]}>
+                    {renderStatCard('Total Revenue', formatCurrency(stats.totalRevenue), Wallet, primaryColor)}
+                    {renderStatCard('Paid', formatCurrency(stats.paid), Calendar, '#10b981')}
+                    {renderStatCard('Overdue', formatCurrency(stats.overdue), AlertTriangle, '#ef4444')}
                 </View>
 
                 {/* Stripe HUD */}
@@ -281,24 +293,24 @@ export function DashboardScreen({ navigation }: any) {
                             onPress={() => navigation.navigate('Settings', { screen: 'StripeDashboard' })}
                             activeOpacity={0.7}
                         >
-                            <Card style={[styles.stripeHudCard, { backgroundColor: '#6366f1' }]}>
+                            <Card style={[styles.stripeHudCard, { backgroundColor: cardBg }]}>
                                 <View style={styles.stripeHudHeader}>
                                     <View style={styles.stripeHudTitleRow}>
-                                        <CreditCard color="#fff" size={18} />
-                                        <Text style={styles.stripeHudTitle}>Stripe Net Volume</Text>
+                                        <CreditCard color={primaryColor} size={18} />
+                                        <Text style={[styles.stripeHudTitle, { color: mutedColor }]}>Stripe Net Volume</Text>
                                     </View>
-                                    <ChevronRight color="rgba(255,255,255,0.7)" size={20} />
+                                    <ChevronRight color={mutedColor} size={20} />
                                 </View>
-                                <Text style={styles.stripeHudValue}>{formatCurrency(stripeSummary.totalNet)}</Text>
-                                <View style={styles.stripeHudStats}>
+                                <Text style={[styles.stripeHudValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalNet)}</Text>
+                                <View style={[styles.stripeHudStats, { borderTopColor: borderColor }]}>
                                     <View style={styles.stripeHudStatItem}>
-                                        <Text style={styles.stripeHudStatLabel}>Payouts</Text>
-                                        <Text style={styles.stripeHudStatValue}>{formatCurrency(stripeSummary.totalPayouts)}</Text>
+                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>Payouts</Text>
+                                        <Text style={[styles.stripeHudStatValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalPayouts)}</Text>
                                     </View>
-                                    <View style={styles.stripeHudStatDivider} />
+                                    <View style={[styles.stripeHudStatDivider, { backgroundColor: borderColor }]} />
                                     <View style={styles.stripeHudStatItem}>
-                                        <Text style={styles.stripeHudStatLabel}>Pending</Text>
-                                        <Text style={styles.stripeHudStatValue}>{formatCurrency(stripeSummary.pendingPayouts)}</Text>
+                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>Pending</Text>
+                                        <Text style={[styles.stripeHudStatValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.pendingPayouts)}</Text>
                                     </View>
                                 </View>
                             </Card>
@@ -307,30 +319,71 @@ export function DashboardScreen({ navigation }: any) {
                 )}
 
                 {/* Section 2: Performance Chart */}
-                <View style={[styles.sectionHeader, { marginTop: 8 }]}>
+                <View style={[styles.sectionHeader, { marginTop: 12 }]}>
                     <View style={styles.sectionTitleRow}>
                         <BarChart2 color={primaryColor} size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('performance', language)}</Text>
                     </View>
                 </View>
 
-                <Card style={styles.chartCard}>
-                    <View style={styles.chartContainer}>
-                        {monthlyStats.map((m, i) => (
-                            <View key={i} style={styles.chartCol}>
-                                <View style={styles.barContainer}>
-                                    <View style={[styles.bar, { height: Math.max((m.revenue / maxVal) * 100, 4), backgroundColor: primaryColor }]} />
-                                    <View style={[styles.bar, { height: Math.max((m.expenses / maxVal) * 100, 4), backgroundColor: '#f43f5e', marginLeft: 2 }]} />
-                                </View>
-                                <Text style={[styles.chartLabel, { color: mutedColor }]}>{m.month}</Text>
+                {monthlyStats.length > 0 && (
+                    <>
+                        <Card style={[styles.chartCard, { overflow: 'hidden' }]}>
+                            {/* Grid Lines */}
+                            <View style={styles.chartGrid}>
+                                {[1, 0.66, 0.33, 0].map((val, idx) => (
+                                    <View key={idx} style={styles.gridLineContainer}>
+                                        <Text style={[styles.gridLabel, { color: mutedColor }]}>
+                                            {formatCurrency(maxVal * val).split('.')[0]}
+                                        </Text>
+                                        <View style={[styles.gridLine, { backgroundColor: borderColor }]} />
+                                    </View>
+                                ))}
                             </View>
-                        ))}
-                    </View>
-                    <View style={styles.chartLegend}>
-                        <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: primaryColor }]} /><Text style={[styles.legendText, { color: mutedColor }]}>{t('totalRevenue', language).split(' ')[1] || t('totalRevenue', language)}</Text></View>
-                        <View style={styles.legendItem}><View style={[styles.dot, { backgroundColor: '#f43f5e' }]} /><Text style={[styles.legendText, { color: mutedColor }]}>{t('expenses', language)}</Text></View>
-                    </View>
-                </Card>
+
+                            {/* Chart Bars */}
+                            <View style={styles.chartContainer}>
+                                {monthlyStats.map((m, i) => {
+                                    const isSelected = selectedMonth?.month === m.month;
+                                    return (
+                                        <TouchableOpacity
+                                            key={i}
+                                            style={[styles.chartCol, isSelected && { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)', borderRadius: 8 }]}
+                                            onPress={() => setSelectedMonth(m)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View style={styles.barContainer}>
+                                                <View style={[styles.bar, { height: (Math.max((m.revenue / maxVal) * 100, 4) + '%') as any, backgroundColor: primaryColor, opacity: isSelected ? 1 : 0.7 }]} />
+                                                <View style={[styles.bar, { height: (Math.max((m.expenses / maxVal) * 100, 4) + '%') as any, backgroundColor: '#f43f5e', marginLeft: 4, opacity: isSelected ? 1 : 0.7 }]} />
+                                            </View>
+                                            <Text style={[styles.chartLabel, { color: isSelected ? textColor : mutedColor, fontWeight: isSelected ? '700' : '500' }]}>{m.month}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </Card>
+
+                        {/* Selected Month Detail */}
+                        {selectedMonth && (
+                            <View style={styles.statsRow}>
+                                <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>In</Text>
+                                    <Text style={[styles.statValue, { color: '#10b981', fontSize: 16 }]}>{isPrivacyMode ? '****' : formatCurrency(selectedMonth.revenue)}</Text>
+                                </View>
+                                <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>Out</Text>
+                                    <Text style={[styles.statValue, { color: '#ef4444', fontSize: 16 }]}>{isPrivacyMode ? '****' : formatCurrency(selectedMonth.expenses)}</Text>
+                                </View>
+                                <View style={[styles.statCard, { backgroundColor: cardBg, padding: 12 }]}>
+                                    <Text style={[styles.statLabel, { color: mutedColor }]}>Net</Text>
+                                    <Text style={[styles.statValue, { color: selectedMonth.revenue >= selectedMonth.expenses ? primaryColor : '#ef4444', fontSize: 16 }]}>
+                                        {isPrivacyMode ? '****' : formatCurrency(selectedMonth.revenue - selectedMonth.expenses)}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+                    </>
+                )}
 
                 {/* Section 3: Recent Invoices */}
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
@@ -338,7 +391,7 @@ export function DashboardScreen({ navigation }: any) {
                         <FileText color={primaryColor} size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('recentInvoices', language)}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => navigation.navigate('InvoicesTab')}>
+                    <TouchableOpacity onPress={() => navigation.navigate('InvoicesTab', { screen: 'AllInvoices', params: { type: 'invoice' } })}>
                         <Text style={{ color: primaryColor, fontWeight: '600' }}>{t('viewAll', language)}</Text>
                     </TouchableOpacity>
                 </View>
@@ -359,7 +412,7 @@ export function DashboardScreen({ navigation }: any) {
                                 <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || 'Quick Invoice'}</Text>
                             </View>
                             <View style={styles.invoiceRight}>
-                                <Text style={[styles.invoiceAmount, { color: textColor }]}>{formatCurrency(inv.total_amount)}</Text>
+                                <Text style={[styles.invoiceAmount, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(inv.total_amount)}</Text>
                                 <StatusBadge status={inv.status} />
                             </View>
                         </TouchableOpacity>
@@ -377,13 +430,7 @@ export function DashboardScreen({ navigation }: any) {
 
                 <View style={{ gap: 12, marginBottom: 24 }}>
                     <Button
-                        title={t('profileDashboard', language)}
-                        variant="shortcut"
-                        icon={User}
-                        onPress={() => navigation.navigate('Profile')}
-                    />
-                    <Button
-                        title={t('appSettings', language)}
+                        title={t('settings', language) || 'Settings'}
                         variant="shortcut"
                         icon={Settings}
                         onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })}
@@ -405,7 +452,6 @@ export function DashboardScreen({ navigation }: any) {
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Online Sales</Text>
                     </View>
                 </View>
-
 
                 {/* Low Stock Alerts */}
                 {lowStockProducts.length > 0 && (
@@ -436,21 +482,13 @@ export function DashboardScreen({ navigation }: any) {
     );
 }
 
-function StatusItem({ label, value, color, bgColor }: any) {
-    return (
-        <View style={[styles.statusItem, { backgroundColor: bgColor }]}>
-            <Text style={[styles.statusLabel, { color }]}>{label}</Text>
-            <Text style={[styles.statusValue, { color }]}>{value}</Text>
-        </View>
-    );
-}
-
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    welcome: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
-    companyName: { fontSize: 28, fontWeight: 'bold' },
+    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 100 },
 
@@ -459,29 +497,58 @@ const styles = StyleSheet.create({
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold' },
 
-    // Daily Reports styles
-    dailyReportsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-    dailyCard: { flex: 1, padding: 16, borderRadius: 16 },
-    dailyCardContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    dailyIconContainer: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    dailyCardInfo: { flex: 1 },
-    dailyCardLabel: { fontSize: 12, fontWeight: '500', marginBottom: 4 },
-    dailyCardValue: { fontSize: 20, fontWeight: 'bold' },
-
-    // Status row
-    statusRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    statusItem: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
-    statusLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase' },
-    statusValue: { fontSize: 13, fontWeight: 'bold' },
+    // Stats Grid similar to HR
+    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+    statCard: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 20,
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    statIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    statValue: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+    statLabel: { fontSize: 11, fontWeight: '600' },
 
     // Chart styles
     chartCard: { padding: 16, marginBottom: 16, borderRadius: 16 },
-    chartContainer: { height: 140, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingBottom: 20 },
-    chartCol: { alignItems: 'center', flex: 1 },
-    barContainer: { height: '100%', justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'flex-end' },
-    bar: { width: 10, borderRadius: 5 },
+    chartGrid: {
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        right: 16,
+        bottom: 40, // leave space for labels
+        justifyContent: 'space-between',
+        zIndex: 0,
+    },
+    gridLineContainer: { flexDirection: 'row', alignItems: 'center' },
+    gridLabel: { width: 30, fontSize: 9, marginRight: 8, textAlign: 'right' },
+    gridLine: { flex: 1, height: 1, opacity: 0.5 },
+
+    chartContainer: {
+        height: 180,
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        paddingLeft: 40, // Space for grid labels
+        paddingTop: 10,
+        zIndex: 1,
+    },
+    chartCol: { alignItems: 'center', flex: 1, height: '100%', justifyContent: 'flex-end', paddingTop: 10, paddingBottom: 0 },
+    barContainer: { height: '85%', justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'flex-end' },
+    bar: { width: 12, borderRadius: 6 },
     chartLabel: { fontSize: 10, marginTop: 8, fontWeight: '600' },
-    chartLegend: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 8 },
+    chartLegend: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 12 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 8, height: 8, borderRadius: 4 },
     legendText: { fontSize: 12, fontWeight: '500' },
@@ -496,27 +563,11 @@ const styles = StyleSheet.create({
     invoiceAmount: { fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
     emptyText: { textAlign: 'center', padding: 20, fontStyle: 'italic' },
 
-    // Scan invoice card
-    scanCard: { padding: 20, borderRadius: 16, marginBottom: 16 },
-    scanCardContent: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-    scanIconContainer: { width: 72, height: 72, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    scanCardInfo: { flex: 1 },
-    scanCardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-    scanCardDescription: { fontSize: 13, lineHeight: 18 },
-    scanArrow: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-
     // Alerts
     alertCard: { padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#f97316', borderRadius: 12 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
     alertTitle: { fontWeight: 'bold' },
     alertText: { fontSize: 13 },
-
-    // Profile section
-    profileGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-    profileCard: { padding: 14, borderRadius: 14, flex: 1 },
-    profileCardContent: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    profileIconContainer: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    profileCardTitle: { flex: 1, fontSize: 13, fontWeight: '600' },
 
     // Stripe HUD
     stripeHudCard: {
@@ -541,13 +592,10 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     stripeHudTitle: {
-        color: '#fff',
         fontSize: 14,
         fontWeight: '600',
-        opacity: 0.9,
     },
     stripeHudValue: {
-        color: '#fff',
         fontSize: 32,
         fontWeight: '800',
         marginBottom: 16,
@@ -556,34 +604,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.2)',
         paddingTop: 16,
     },
     stripeHudStatItem: {
         flex: 1,
     },
     stripeHudStatLabel: {
-        color: 'rgba(255,255,255,0.8)',
         fontSize: 12,
         marginBottom: 4,
     },
     stripeHudStatValue: {
-        color: '#fff',
         fontSize: 16,
         fontWeight: '700',
     },
     stripeHudStatDivider: {
         width: 1,
         height: 24,
-        backgroundColor: 'rgba(255,255,255,0.2)',
         marginHorizontal: 20,
     },
-
-    // Online Sales section
-    onlineSalesCard: { padding: 16, borderRadius: 14, marginBottom: 16 },
-    onlineSalesContent: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    onlineSalesIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    onlineSalesInfo: { flex: 1 },
-    onlineSalesTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-    onlineSalesDesc: { fontSize: 13 },
 });

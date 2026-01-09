@@ -14,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, FAB, ScreenHeader } from '../../components/common';
+import { Card, FAB } from '../../components/common';
 
 import { Client } from '../../types';
 import { t } from '../../i18n';
@@ -40,6 +40,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const inputBg = isDark ? '#1e293b' : '#ffffff';
 
     // Derive cities for filtering
     const cities = ['Të gjitha', ...Array.from(new Set(clients.map(c => c.city).filter((c): c is string => !!c)))];
@@ -141,6 +142,20 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
         ]);
     };
 
+    const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
+        const Icon = icon;
+        return (
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+                <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
+            </View>
+        );
+    };
+
+
     const renderClient = (item: Client) => {
         const revenue = clientStats[item.id] || 0;
         const hasDiscount = (item.discount_percent || 0) > 0;
@@ -152,7 +167,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('ClientForm', { clientId: item.id })}
             >
-                <Card style={styles.clientCard}>
+                <View style={[styles.clientCard, { backgroundColor: cardBg }]}>
                     <View style={styles.clientHeader}>
                         <View style={styles.clientInfo}>
                             <View style={styles.nameRow}>
@@ -176,15 +191,6 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                                     <Text style={[styles.contactText, { color: mutedColor }]}>{item.phone}</Text>
                                 </View>
                             )}
-
-                            {fullAddress && (
-                                <View style={styles.addressRow}>
-                                    <MapPin size={12} color="#818cf8" />
-                                    <Text style={[styles.addressText, { color: mutedColor }]} numberOfLines={1}>
-                                        {fullAddress}
-                                    </Text>
-                                </View>
-                            )}
                         </View>
                         <View style={styles.clientActions}>
                             <TouchableOpacity
@@ -204,13 +210,13 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                             <Text style={[styles.revenueLabel, { color: mutedColor }]}>të ardhura</Text>
                         </View>
                         {item.city && (
-                            <View style={styles.cityBadge}>
-                                <MapPin color="#818cf8" size={10} />
-                                <Text style={styles.cityText}>{item.city}</Text>
+                            <View style={[styles.cityBadge, { backgroundColor: `${primaryColor}15` }]}>
+                                <MapPin color={primaryColor} size={10} />
+                                <Text style={[styles.cityText, { color: primaryColor }]}>{item.city}</Text>
                             </View>
                         )}
                     </View>
-                </Card>
+                </View>
             </TouchableOpacity>
         );
     };
@@ -219,7 +225,7 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.titleLabel, { color: mutedColor }]}>{t('management', language).toUpperCase()}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('clients', language)}</Text>
                 </View>
                 <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ClientForm')}>
@@ -230,36 +236,18 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Client Stats HUD */}
+                {/* Stats */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <Users color="#818cf8" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: textColor }]}>{stats.totalClients}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>{t('clients', language)}</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <DollarSign color="#10b981" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: textColor }]}>{formatCurrency(stats.totalRevenue)}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>Të ardhura</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <TrendingUp color="#0ea5e9" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: textColor }]}>{stats.activeClients}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>Aktivë</Text>
-                            </View>
-                        </View>
+                        {renderStatCard(t('clients', language), stats.totalClients, Users, '#818cf8')}
+                        {renderStatCard('Të ardhura', formatCurrency(stats.totalRevenue), DollarSign, '#10b981')}
+                        {renderStatCard('Aktivë', stats.activeClients, TrendingUp, '#0ea5e9')}
                     </ScrollView>
                 </View>
 
-                {/* Filters & Search Header */}
-                <View style={{ backgroundColor: bgColor }}>
-                    <View style={[styles.searchBar, { backgroundColor: cardBg }]}>
+                {/* Filters & Search */}
+                <View>
+                    <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
                             style={[styles.searchInput, { color: textColor }]}
@@ -303,12 +291,12 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
                                     onPress={() => setSortBy(s)}
                                     style={[
                                         styles.sortBtn,
-                                        sortBy === s && { borderBottomColor: '#818cf8', borderBottomWidth: 2 }
+                                        sortBy === s && { borderBottomColor: primaryColor, borderBottomWidth: 2 }
                                     ]}
                                 >
                                     <Text style={[
                                         styles.sortBtnText,
-                                        { color: sortBy === s ? '#818cf8' : mutedColor }
+                                        { color: sortBy === s ? primaryColor : mutedColor }
                                     ]}>{s === 'name' ? 'EMRI' : 'VLERA'}</Text>
                                 </TouchableOpacity>
                             ))}
@@ -338,32 +326,49 @@ export function ClientsScreen({ navigation, showHeader = false }: ClientsScreenP
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
-    titleLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 },
-    title: { fontSize: 30, fontWeight: 'bold' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
-    scrollContent: { paddingBottom: 100, paddingHorizontal: 20 },
-    statsContainer: { paddingVertical: 8, marginBottom: 8 },
-    statsScroll: { gap: 12 },
-    statCardPlain: { padding: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 130 },
-    statValue: { fontSize: 16, fontWeight: 'bold' },
-    statLabel: { fontSize: 11, fontWeight: '600' },
+    scrollContent: { paddingBottom: 100 },
 
-    searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
+    // Stats
+    statsContainer: { marginBottom: 24 },
+    statsScroll: { paddingHorizontal: 20, gap: 12 },
+    statCard: {
+        minWidth: 140,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        gap: 8
+    },
+    statIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statValue: { fontSize: 18, fontWeight: 'bold' },
+    statLabel: { fontSize: 11, fontWeight: '500' },
+
+    // Search & Filter
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
     searchInput: { flex: 1, fontSize: 16 },
 
-    filterScroll: { gap: 8, marginBottom: 16 },
+    filterScroll: { gap: 8, marginBottom: 16, paddingHorizontal: 20 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    filterText: { fontSize: 12, fontWeight: '600' },
+    filterText: { fontSize: 13, fontWeight: '600' },
 
-    sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-    tinyLabel: { fontSize: 10, fontWeight: 'bold' },
+    sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 20 },
+    tinyLabel: { fontSize: 11, fontWeight: '700', opacity: 0.7 },
     sortButtons: { flexDirection: 'row', gap: 16 },
     sortBtn: { paddingVertical: 4 },
-    sortBtnText: { fontSize: 10, fontWeight: 'bold' },
+    sortBtnText: { fontSize: 12, fontWeight: '700' },
 
-    clientList: { paddingHorizontal: 0 },
-    clientCard: { marginBottom: 12, padding: 16, borderRadius: 18 },
+    // List
+    clientList: { paddingHorizontal: 20, gap: 12 },
+    clientCard: { padding: 16, borderRadius: 16 },
     clientHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     clientInfo: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 },
@@ -373,18 +378,16 @@ const styles = StyleSheet.create({
 
     contactRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
     contactText: { fontSize: 13 },
-    addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: 'rgba(129, 140, 248, 0.05)', padding: 6, borderRadius: 8 },
-    addressText: { fontSize: 11, flex: 1 },
 
     clientActions: { flexDirection: 'row', gap: 4 },
     actionButton: { padding: 8 },
 
     clientFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 },
     revenueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-    revenueValue: { fontSize: 18, fontWeight: '800' },
+    revenueValue: { fontSize: 16, fontWeight: '800' },
     revenueLabel: { fontSize: 11, fontWeight: '600' },
-    cityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(129, 140, 248, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    cityText: { color: '#818cf8', fontSize: 10, fontWeight: '700' },
+    cityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    cityText: { fontSize: 10, fontWeight: '700' },
 
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 14, fontWeight: '500' },

@@ -298,11 +298,13 @@ export function VendorLedgerScreen({ navigation, route }: any) {
         return (
             <View style={[styles.container, { backgroundColor: bgColor }]}>
                 <View style={[styles.mainHeader, { borderBottomColor: borderColor }]}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <ArrowLeft color={textColor} size={24} />
                     </TouchableOpacity>
-                    <Text style={[styles.mainTitle, { color: textColor }]}>{t('supplierCard', language) || 'Kartela e Furnitorit'}</Text>
-                    <View style={{ width: 44 }} />
+                    <View>
+                        <Text style={[styles.subtitle, { color: mutedColor }]}>{t('reports', language)}</Text>
+                        <Text style={[styles.mainTitle, { color: textColor }]}>{t('supplierCard', language) || 'Kartela e Furnitorit'}</Text>
+                    </View>
                 </View>
 
                 <View style={styles.content}>
@@ -356,12 +358,12 @@ export function VendorLedgerScreen({ navigation, route }: any) {
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={[styles.mainHeader, { borderBottomColor: borderColor }]}>
-                <TouchableOpacity onPress={() => setSelectedVendorId(null)} style={[styles.backButton, { backgroundColor: cardBg }]}>
+                <TouchableOpacity onPress={() => setSelectedVendorId(null)} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginHorizontal: 12 }}>
-                    <Text style={[styles.mainTitle, { color: textColor, fontSize: 18 }]} numberOfLines={1}>{selectedVendor?.name}</Text>
-                    <Text style={{ color: mutedColor, fontSize: 12 }}>Vendor Ledger</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('supplierCard', language)}</Text>
+                    <Text style={[styles.mainTitle, { color: textColor, fontSize: 24 }]} numberOfLines={1}>{selectedVendor?.name}</Text>
                 </View>
                 <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: cardBg }]}
@@ -450,9 +452,10 @@ export function VendorLedgerScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    mainHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 1 },
-    backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-    mainTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+    mainHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    mainTitle: { fontSize: 28, fontWeight: '800' },
     actionBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 
     content: { padding: 20, paddingBottom: 40 },

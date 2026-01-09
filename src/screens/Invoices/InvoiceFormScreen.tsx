@@ -1,1237 +1,890 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
     ScrollView,
     TouchableOpacity,
+    StyleSheet,
+    Alert,
     KeyboardAvoidingView,
     Platform,
-    Alert,
-    StyleSheet,
-    Switch,
-    TextInput,
-    Keyboard,
+    ActivityIndicator,
+    Modal,
+    TextInput
 } from 'react-native';
-import { useFocusEffect, CommonActions } from '@react-navigation/native';
-import { ArrowLeft, Plus, Minus, Trash2, ChevronDown, User, Calendar, FileText, Percent, RefreshCw, Languages, Search, QrCode, Barcode, Camera, Image as ImageIcon, Contact, FileSignature } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { SvgXml } from 'react-native-svg';
-import { t } from '../../i18n';
-import { supabase } from '../../api/supabase';
+import {
+    ArrowLeft,
+    Save,
+    Calendar,
+    User,
+    Plus,
+    Trash2,
+    FileText,
+    CreditCard,
+    Check,
+    Search,
+    ChevronDown,
+    ChevronUp,
+    Hash,
+    AlignLeft,
+    Eye,
+    X
+} from 'lucide-react-native';
+import { WebView } from 'react-native-webview';
+import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../api/supabase';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, Input, Button, QuickAddModal, BarcodeScannerModal, SignaturePadModal } from '../../components/common';
-import { Profile, Invoice, Client, Product, InvoiceStatus, PaymentMethod } from '../../types';
+import { Card, Button, Input } from '../../components/common';
+import { Invoice, InvoiceItem, Client, Product, Profile } from '../../types';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatCurrency } from '../../utils/format';
+import { t } from '../../i18n';
 
 interface InvoiceFormScreenProps {
     navigation: any;
     route: any;
 }
 
-interface LineItem {
-    id: string;
-    product_id?: string;
-    description: string;
-    sku?: string;
-    quantity: number;
-    unit_price: number;
-    unit: string;
-    tax_rate?: number;
-    discount?: number;
-    amount: number;
-}
-
-const intervals = [
-    { label: 'Weekly', value: 'weekly' },
-    { label: 'Monthly', value: 'monthly' },
-    { label: 'Quarterly', value: 'quarterly' },
-    { label: 'Yearly', value: 'yearly' },
-];
-
-const units = ['pcs', 'hrs', 'kg', 'unit', 'mt', 'l'];
-
 export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps) {
     const { user } = useAuth();
-    const { isDark, primaryColor, language } = useTheme();
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const invoiceId = route.params?.invoiceId;
-    const isEditing = !!invoiceId;
-
-    // Get document type info from route params
-    const documentType = route.params?.type || 'invoice';
-    const documentSubtype = route.params?.subtype || 'regular';
-    const documentKey = route.params?.documentKey || 'regularInvoice';
-
-    // Forced template and page size for fiscal invoices
-    const forceTemplate = route.params?.forceTemplate; // 'kosovo' for Faturë e Rregullt
-    const forcePageSize = route.params?.forcePageSize; // 'A4' for Faturë e Rregullt
-    const isFiscalInvoice = !!forceTemplate;
-
-    // Document type configurations
-    const documentConfigs: Record<string, {
-        prefix: string;
-        title: string;
-        color: string;
-        showRecurring: boolean;
-        showDueDate: boolean;
-        showSignature: boolean;
-        showDiscount: boolean;
-        showTax: boolean;
-        statusOptions: InvoiceStatus[];
-    }> = {
-        // Invoices
-        'regular': { prefix: 'INV', title: t('regularInvoice', language), color: '#6366f1', showRecurring: true, showDueDate: true, showSignature: true, showDiscount: true, showTax: true, statusOptions: ['draft', 'sent', 'pending', 'paid', 'overdue'] },
-        'delivery_note': { prefix: 'DN', title: t('deliveryNote', language), color: '#3b82f6', showRecurring: false, showDueDate: false, showSignature: true, showDiscount: false, showTax: false, statusOptions: ['draft', 'sent', 'pending'] },
-        // Offers
-        'order': { prefix: 'ORD', title: t('order', language), color: '#8b5cf6', showRecurring: false, showDueDate: true, showSignature: false, showDiscount: true, showTax: true, statusOptions: ['draft', 'sent', 'pending', 'paid'] },
-        'pro_invoice': { prefix: 'PRO', title: t('proInvoice', language), color: '#a855f7', showRecurring: false, showDueDate: true, showSignature: false, showDiscount: true, showTax: true, statusOptions: ['draft', 'sent', 'pending'] },
-        'offer': { prefix: 'OFF', title: t('offer', language), color: '#ec4899', showRecurring: false, showDueDate: true, showSignature: false, showDiscount: true, showTax: true, statusOptions: ['draft', 'sent', 'pending', 'paid'] },
-    };
-
-    const currentConfig = documentConfigs[documentSubtype] || documentConfigs['regular'];
+    const { isDark, language } = useTheme();
+    const { invoiceId, type = 'invoice', subtype = 'regular', documentKey } = route.params || {};
 
     const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
+
+    // Form State
+    const [invoiceNumber, setInvoiceNumber] = useState('');
+    const [issueDate, setIssueDate] = useState(new Date());
+    const [dueDate, setDueDate] = useState<Date | null>(null);
+    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+    const [items, setItems] = useState<Partial<InvoiceItem>[]>([]);
+    const [notes, setNotes] = useState('');
+    const [discount, setDiscount] = useState<string>('0'); // Persist as string for input
+    const [status, setStatus] = useState<'draft' | 'sent' | 'paid' | 'overdue'>('draft');
+    const [profile, setProfile] = useState<Profile | null>(null);
+
+    // Pickers
     const [showClientPicker, setShowClientPicker] = useState(false);
-    const [showQuickClient, setShowQuickClient] = useState(false);
-    const [showQuickProduct, setShowQuickProduct] = useState(false);
-    const [showScanner, setShowScanner] = useState(false);
-    const [showSignaturePad, setShowSignaturePad] = useState(false);
-    const [showProductDropdown, setShowProductDropdown] = useState<string | null>(null);
-    const [activeRowId, setActiveRowId] = useState<string | null>(null);
-    const [currency, setCurrency] = useState('USD');
-    const [defaultTaxRate, setDefaultTaxRate] = useState(0);
+    const [showProductPicker, setShowProductPicker] = useState(false);
+    const [clientSearch, setClientSearch] = useState('');
+    const [productSearch, setProductSearch] = useState('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [datePickerMode, setDatePickerMode] = useState<'issue' | 'due'>('issue');
+
+    // Preview State
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const inputBg = isDark ? '#0f172a' : '#f1f5f9';
     const borderColor = isDark ? '#334155' : '#e2e8f0';
-
-    const [formData, setFormData] = useState({
-        client_id: '',
-        invoice_number: '',
-        issue_date: new Date().toISOString().split('T')[0],
-        due_date: '',
-        status: 'draft' as InvoiceStatus,
-        discount_amount: 0,
-        discount_percent: 0,
-        notes: '',
-        is_recurring: false,
-        recurring_interval: 'monthly' as any,
-        type: documentType as 'invoice' | 'offer',
-        subtype: documentSubtype,
-        buyer_signature_url: '',
-        payment_method: 'bank' as PaymentMethod,
-        amount_received: 0,
-        paper_size: 'A4' as 'A4' | 'A5' | 'Receipt',
-    });
-    const [showPreview, setShowPreview] = useState(false);
-
-    const [lineItems, setLineItems] = useState<LineItem[]>([
-        { id: '1', description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 },
-    ]);
-
-    // Reset form state when screen is focused for a new invoice (Fix #4: Unique invoice IDs)
-    useFocusEffect(
-        useCallback(() => {
-            if (!isEditing) {
-                // Reset line items for new invoice
-                setLineItems([{ id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0 }]);
-                // Reset form data to defaults
-                setFormData(prev => ({
-                    ...prev,
-                    client_id: '',
-                    invoice_number: '',
-                    due_date: '',
-                    status: 'draft',
-                    discount_amount: 0,
-                    notes: '',
-                    is_recurring: false,
-                    buyer_signature_url: '',
-                    payment_method: 'bank',
-                    amount_received: 0,
-                }));
-            }
-        }, [isEditing])
-    );
-
-    // Safe navigation back - always go to FaturatMain to stay on invoice tab
-    // This prevents going back to Dashboard when navigated from there
-    const safeGoBack = () => {
-        // Always navigate to FaturatMain to stay on the Invoices tab
-        navigation.dispatch(
-            CommonActions.reset({
-                index: 0,
-                routes: [{ name: 'FaturatMain' }],
-            })
-        );
-    };
+    const primaryColor = profile?.primary_color || '#818cf8';
 
     useEffect(() => {
-        fetchInitialData();
-        if (isEditing) {
-            fetchInvoice();
-        } else {
-            // Initialize with route params
-            setFormData(prev => ({
-                ...prev,
-                type: documentType,
-                subtype: documentSubtype,
-                // Apply forced page size for fiscal invoices
-                paper_size: forcePageSize || prev.paper_size,
-            }));
-            generateInvoiceNumber();
-        }
+        loadData();
     }, []);
 
-    // Effect to regenerate number when type/subtype changes (only in create mode)
-    useEffect(() => {
-        if (!isEditing && profile) {
-            generateInvoiceNumber();
-        }
-    }, [formData.type, formData.subtype, profile]);
-
-    const fetchInitialData = async () => {
+    const loadData = async () => {
+        setLoading(true);
         if (!user) return;
 
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (profile) {
-            setProfile(profile);
-            setCurrency(profile.currency || 'USD');
-            setDefaultTaxRate(profile.tax_rate || 0);
-
-            // AUTO-APPLY DEFAULT DISCOUNT
-            if (!isEditing && profile.default_client_discount) {
-                setFormData(prev => ({ ...prev, discount_percent: Number(profile.default_client_discount) }));
-            }
-
-            // AUTO-APPLY DEFAULT DISCOUNT
-            if (!isEditing && profile.default_client_discount) {
-                setFormData(prev => ({ ...prev, discount_percent: Number(profile.default_client_discount) }));
-            }
-
-            if (profile.template_config?.pageSize && !forcePageSize) {
-                // Only apply profile page size if not a fiscal invoice with forced size
-                setFormData(prev => ({ ...prev, paper_size: profile.template_config.pageSize }));
-            }
-
-            const companyId = profile.active_company_id || profile.company_id || user.id;
-
-            const { data: clientsData } = await supabase
-                .from('clients')
+        // 1. Load Profile/Company
+        let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (profileData?.active_company_id) {
+            const { data: companyData } = await supabase
+                .from('companies')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
-            if (clientsData) setClients(clientsData);
-
-            const { data: productsData } = await supabase
-                .from('products')
-                .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
-            if (productsData) setProducts(productsData);
+                .eq('id', profileData.active_company_id)
+                .single();
+            if (companyData) profileData = { ...profileData, ...companyData };
         }
-    };
+        setProfile(profileData);
 
-    const fetchInvoice = async () => {
-        const { data: invoice } = await supabase.from('invoices').select('*').eq('id', invoiceId).single();
-        if (invoice) {
-            setFormData({
-                client_id: invoice.client_id || '',
-                invoice_number: invoice.invoice_number,
-                issue_date: invoice.issue_date,
-                due_date: invoice.due_date || '',
-                status: invoice.status,
-                discount_amount: Number(invoice.discount_amount) || 0,
-                discount_percent: Number(invoice.discount_percent) || 0,
-                notes: invoice.notes || '',
-                is_recurring: invoice.is_recurring || false,
-                recurring_interval: invoice.recurring_interval || 'monthly',
-                type: (invoice.type as 'invoice' | 'offer') || 'invoice',
-                subtype: invoice.subtype || 'regular',
-                buyer_signature_url: invoice.buyer_signature_url || '',
-                payment_method: invoice.payment_method || 'bank',
-                amount_received: Number(invoice.amount_received) || 0,
-                paper_size: (invoice.paper_size as any) || 'A4',
-            });
-        }
+        const companyId = profileData.active_company_id || profileData.company_id || user.id;
 
-        // Join with products to get SKU if not saved in item
-        const { data: items } = await supabase
-            .from('invoice_items')
-            .select('*, product:products(sku)')
-            .eq('invoice_id', invoiceId);
-
-        if (items && items.length > 0) setLineItems(items.map((it: any) => ({
-            ...it,
-            sku: it.sku || it.product?.sku,
-            quantity: Number(it.quantity),
-            unit_price: Number(it.unit_price),
-            discount: Number(it.discount) || 0,
-            amount: Number(it.amount)
-        })));
-    };
-
-    const generateInvoiceNumber = async () => {
-        const { count } = await supabase.from('invoices')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user?.id)
-            .eq('type', formData.type)
-            .eq('subtype', formData.subtype);
-
-        const nextNumber = (count || 0) + 1;
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const yyyy = today.getFullYear();
-
-        const prefix = currentConfig.prefix;
-        setFormData((prev) => ({
-            ...prev,
-            invoice_number: `${prefix}-${String(nextNumber).padStart(3, '0')}-${dd}-${mm}-${yyyy}`
-        }));
-    };
-
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency,
-        }).format(amount);
-    };
-
-    const calculateSubtotal = () => lineItems.reduce((sum, item) => sum + item.amount, 0);
-
-    const calculateTax = () => {
-        return lineItems.reduce((sum, item) => {
-            const itemTax = item.tax_rate !== undefined ? item.tax_rate : defaultTaxRate;
-            return sum + (item.amount * (itemTax / 100));
-        }, 0);
-    };
-
-    const calculateDiscount = () => {
-        const subtotal = calculateSubtotal();
-        if (formData.discount_percent > 0) return subtotal * (formData.discount_percent / 100);
-        return formData.discount_amount;
-    };
-
-    const calculateTotal = () => calculateSubtotal() + calculateTax() - calculateDiscount();
-
-    const calculateChange = () => {
-        const total = calculateTotal();
-        const received = formData.amount_received || 0;
-        return Math.max(0, received - total);
-    };
-
-    const getPreviewStyles = () => {
-        switch (formData.paper_size) {
-            case 'A5': return { width: 300, height: 420 };
-            case 'Receipt': return { width: 220, minHeight: 400 };
-            default: return { width: 320, height: 450 }; // A4 semi-scaled
-        }
-    };
-
-    const updateLineItem = (id: string, field: keyof LineItem, value: any) => {
-        setLineItems(items => items.map(item => {
-            if (item.id === id) {
-                const updated = { ...item, [field]: value };
-
-                // Recalculate amount if quantity, price, tax, or discount changes
-                if (field === 'quantity' || field === 'unit_price' || field === 'tax_rate' || field === 'discount') {
-                    const qty = field === 'quantity' ? Number(value) : item.quantity;
-                    const price = field === 'unit_price' ? Number(value) : item.unit_price;
-                    const tax = field === 'tax_rate' ? Number(value) : (item.tax_rate || 0);
-                    const discount = field === 'discount' ? Number(value) : (item.discount || 0);
-
-                    // Amount = (Qty * Price * (1 - Discount/100)) * (1 + Tax/100)
-                    const netPrice = qty * price;
-                    const discountedNet = netPrice * (1 - discount / 100);
-                    const total = discountedNet * (1 + tax / 100);
-
-                    updated.amount = Math.round(total * 100) / 100;
-                    updated.tax_rate = tax;
-                    updated.discount = discount;
-                }
-                return updated;
-            }
-            return item;
-        }));
-    };
-
-    const addLineItem = () => {
-        setLineItems(items => [
-            ...items,
-            { id: String(Date.now()), description: '', quantity: 1, unit_price: 0, unit: 'pcs', amount: 0, tax_rate: 18 },
-        ]);
-    };
-
-    const removeLineItem = (id: string) => {
-        if (lineItems.length === 1) return;
-        setLineItems(items => items.filter(item => item.id !== id));
-    };
-
-    const selectProduct = (item: LineItem, product: Product) => {
-        Keyboard.dismiss();
-
-        setLineItems(items => items.map(i => {
-            if (i.id === item.id) {
-                const unitPrice = Math.round(Number(product.unit_price) * 100) / 100;
-                const taxRate = product.tax_rate || 18;
-                const amount = Math.round(i.quantity * unitPrice * (1 + taxRate / 100) * 100) / 100;
-
-                return {
-                    ...i,
-                    description: product.name,
-                    sku: product.sku,
-                    unit_price: unitPrice,
-                    unit: product.unit || 'pcs',
-                    amount: amount,
-                    product_id: product.id,
-                    tax_rate: taxRate,
-                    discount: 0,
-                };
-            }
-            return i;
-        }));
-        setShowProductDropdown(null);
-    };
-
-    const handleQuickAddClient = async (data: any) => {
-        const { data: newClient, error } = await supabase
+        // 2. Load Clients & Products
+        const { data: clientsData } = await supabase
             .from('clients')
-            .insert({ ...data, user_id: user?.id, company_id: profile?.company_id || user?.id })
-            .select()
-            .single();
-        if (newClient) {
-            setClients([...clients, newClient]);
-            setFormData({ ...formData, client_id: newClient.id });
-        }
-    };
+            .select('*')
+            .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+            .order('name');
+        if (clientsData) setClients(clientsData);
 
-    const handleQuickAddProduct = async (data: any) => {
-        const { data: newProduct, error } = await supabase
+        const { data: productsData } = await supabase
             .from('products')
-            .insert({ ...data, user_id: user?.id, company_id: profile?.company_id || user?.id })
-            .select()
-            .single();
-        if (newProduct) {
-            setProducts([...products, newProduct]);
-            if (activeRowId) {
-                const item = lineItems.find(i => i.id === activeRowId);
-                if (item) selectProduct(item, newProduct);
+            .select('*')
+            .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+            .order('name');
+        if (productsData) setProducts(productsData);
+
+        // 3. Load Invoice if editing
+        if (invoiceId) {
+            const { data: invoice } = await supabase
+                .from('invoices')
+                .select(`*, client:clients(*)`)
+                .eq('id', invoiceId)
+                .single();
+
+            if (invoice) {
+                setInvoiceNumber(invoice.invoice_number);
+                setIssueDate(new Date(invoice.issue_date));
+                if (invoice.due_date) setDueDate(new Date(invoice.due_date));
+                setNotes(invoice.notes || '');
+                setStatus(invoice.status);
+                setSelectedClient((invoice as any).client);
+                setDiscount(String(invoice.discount_percent || 0));
+
+                const { data: invoiceItems } = await supabase
+                    .from('invoice_items')
+                    .select('*')
+                    .eq('invoice_id', invoice.id);
+
+                if (invoiceItems) setItems(invoiceItems);
             }
+        } else {
+            // Generate next invoice number
+            const { count } = await supabase
+                .from('invoices')
+                .select('*', { count: 'exact', head: true })
+                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .eq('type', type);
+
+            const nextNum = (count || 0) + 1;
+            const prefix = type === 'offer' ? 'OFF' : 'INV';
+            const year = new Date().getFullYear();
+            setInvoiceNumber(`${prefix}-${year}-${String(nextNum).padStart(4, '0')}`);
         }
+        setLoading(false);
     };
 
-    const handleBarcodeScanned = (code: string) => {
-        const product = products.find(p => p.barcode === code || p.sku === code);
-        if (product && activeRowId) {
-            const item = lineItems.find(i => i.id === activeRowId);
-            if (item) selectProduct(item, product);
-        } else if (activeRowId) {
-            Alert.alert('Not Found', `No product found with barcode: ${code}. Add it as a new product?`, [
-                { text: 'Cancel' },
-                { text: 'Add Product', onPress: () => setShowQuickProduct(true) }
-            ]);
-        }
+    const handleAddItem = (product?: Product) => {
+        const newItem: Partial<InvoiceItem> = {
+            id: `temp-${Date.now()}`,
+            description: product?.name || '',
+            quantity: 1,
+            unit_price: product?.unit_price || 0,
+            amount: product?.unit_price || 0,
+            product_id: product?.id,
+            tax_rate: 0
+        };
+        setItems([...items, newItem]);
+        setShowProductPicker(false);
     };
 
-    const pickBuyerSignature = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 1],
-            quality: 0.5,
-            base64: true,
-        });
+    const handleUpdateItem = (index: number, field: keyof InvoiceItem, value: any) => {
+        const newItems = [...items];
+        newItems[index] = { ...newItems[index], [field]: value };
 
-        if (!result.canceled && result.assets[0].base64) {
-            const base64 = `data:image/png;base64,${result.assets[0].base64}`;
-            setFormData(prev => ({ ...prev, buyer_signature_url: base64 }));
-        }
+        // Recalculate amount
+        const qty = Number(newItems[index].quantity) || 0;
+        const price = Number(newItems[index].unit_price) || 0;
+        // Simple logic: amount = (qty * price)
+
+        newItems[index].amount = (qty * price);
+        setItems(newItems);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        const newItems = [...items];
+        newItems.splice(index, 1);
+        setItems(newItems);
+    };
+
+    const calculateTotals = () => {
+        const subtotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        // Tax logic could be complex (per item), simplifying for UI display here
+        // If tax_rate is per item, we need to sum item taxes.
+        // Tax logic
+        const tax = items.reduce((sum, item) => {
+            const amount = Number(item.amount) || 0;
+            const rate = Number(item.tax_rate) || 0;
+            return sum + (amount * (rate / 100));
+        }, 0);
+
+        const discountPercent = parseFloat(discount) || 0;
+        const discountAmount = (subtotal * discountPercent) / 100;
+        const subtotalAfterDiscount = subtotal - discountAmount;
+        // Tax typically calculated on discounted amount or subtotal depending on region.
+        // Assuming tax is calculated on item level, effectively applied to subtotal. 
+        // If discount is 'global invoice discount', we usually reduce subtotal before tax or reduce total.
+        // Let's assume standard: Subtotal -> Discount -> Taxable Amount -> Tax -> Total.
+        // BUT item amounts already include/exclude tax? 
+        // Based on loop above, 'tax' is sum of item taxes.
+        // If we apply global discount, we should probably reduce tax proportionally?
+        // Simple approach: Total = (Subtotal + Tax) - DiscountAmount.
+        // Or: Discount reduces taxable base.
+        // Let's go with: Discount on Subtotal. Tax recalculated? No, complicated.
+        // Simplest valid model: Final Total = (Subtotal + Tax) * (1 - discount/100).
+        // Let's stick to user request: "add discount... overwritten on this invoice".
+
+        // Let's implement: Discount reduces the Total (Subtotal + Tax).
+        // total = (subtotal + tax) - ((subtotal + tax) * discount / 100)
+
+        const totalBeforeDiscount = subtotal + tax;
+        const totalDiscount = (totalBeforeDiscount * discountPercent) / 100;
+
+        return {
+            subtotal,
+            tax,
+            discount: totalDiscount,
+            total: totalBeforeDiscount - totalDiscount
+        };
     };
 
     const handleSave = async () => {
-        if (!formData.invoice_number) { Alert.alert('Error', 'Invoice number is required'); return; }
-
-        const total = calculateTotal();
-        if (formData.payment_method === 'cash' && total > 300) {
-            Alert.alert(t('error', language), t('cashLimitError', language));
+        if (!selectedClient) {
+            Alert.alert('Error', 'Please select a client');
+            return;
+        }
+        if (items.length === 0) {
+            Alert.alert('Error', 'Please add at least one item');
             return;
         }
 
-        setLoading(true);
+        setSaving(true);
         try {
+            const totals = calculateTotals();
+            const companyId = profile?.active_company_id || profile?.company_id || user?.id;
+
             const invoiceData = {
                 user_id: user?.id,
-                company_id: profile?.company_id || user?.id,
-                client_id: formData.client_id || null,
-                invoice_number: formData.invoice_number,
-                issue_date: formData.issue_date,
-                due_date: formData.due_date || null,
-                status: formData.status,
-                discount_amount: calculateDiscount(),
-                discount_percent: formData.discount_percent,
-                tax_amount: calculateTax(),
-                total_amount: calculateTotal(),
-                notes: formData.notes,
-                is_recurring: formData.is_recurring,
-                recurring_interval: formData.is_recurring ? formData.recurring_interval : null,
-                type: formData.type,
-                subtype: formData.subtype,
-                buyer_signature_url: formData.buyer_signature_url || null,
-                payment_method: formData.payment_method,
-                amount_received: formData.amount_received,
-                change_amount: calculateChange(),
-                paper_size: formData.paper_size,
-                // Force kosovo template for fiscal invoices
-                template_id: forceTemplate || 'hidroterm',
+                company_id: companyId,
+                client_id: selectedClient.id,
+                invoice_number: invoiceNumber,
+                issue_date: issueDate.toISOString().split('T')[0],
+                due_date: dueDate ? dueDate.toISOString().split('T')[0] : null,
+                notes,
+                status,
+                type,
+                subtype,
+                items_count: items.length,
+                subtotal: totals.subtotal,
+                tax_amount: totals.tax,
+                discount_amount: totals.discount,
+                discount_percent: parseFloat(discount) || 0,
+                total_amount: totals.total,
+                amount_received: 0, // Default for now
+                payment_method: 'bank_transfer'
             };
 
-            console.log('Saving invoice:', invoiceData);
+            let savedInvoice;
 
-            let savedId = invoiceId;
-            if (isEditing) {
-                const { error } = await supabase.from('invoices').update(invoiceData).eq('id', invoiceId);
+            if (invoiceId) {
+                // Update
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .update(invoiceData)
+                    .eq('id', invoiceId)
+                    .select()
+                    .single();
                 if (error) throw error;
+                savedInvoice = data;
+
+                // Delete existing items and re-insert (simplest strategy)
                 await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
             } else {
-                const { data, error } = await supabase.from('invoices').insert(invoiceData).select().single();
-                console.log('Insert result:', { data, error });
+                // Insert
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .insert(invoiceData)
+                    .select()
+                    .single();
                 if (error) throw error;
-                savedId = data?.id;
+                savedInvoice = data;
             }
 
-            const itemsToInsert = lineItems
-                .filter(it => it.description)
-                .map(it => ({
-                    invoice_id: savedId,
-                    product_id: it.product_id || null,
-                    description: it.description,
-                    sku: it.sku || null,
-                    quantity: it.quantity,
-                    unit_price: it.unit_price,
-                    unit: it.unit,
-                    tax_rate: currentConfig.showTax ? (it.tax_rate !== undefined ? it.tax_rate : defaultTaxRate) : 0,
-                    discount: it.discount || 0,
-                    amount: it.amount,
-                }));
+            // Insert Items
+            const itemsToInsert = items.map(item => ({
+                invoice_id: savedInvoice.id,
+                product_id: item.product_id,
+                description: item.description,
+                quantity: item.quantity,
+                unit: item.unit || 'pcs',
+                unit_price: item.unit_price,
+                tax_rate: item.tax_rate,
+                amount: item.amount
+            }));
 
-            if (itemsToInsert.length > 0) {
-                const { error: itemsError } = await supabase.from('invoice_items').insert(itemsToInsert);
-                if (itemsError) {
-                    console.error('Error saving items:', itemsError);
-                    throw new Error(`Failed to save items: ${itemsError.message}`);
-                }
-            }
+            const { error: itemsError } = await supabase.from('invoice_items').insert(itemsToInsert);
+            if (itemsError) throw itemsError;
 
-            console.log('Invoice saved successfully:', savedId);
-            setLoading(false);
-            // Navigate to the invoice detail page instead of going back
-            navigation.replace('InvoiceDetail', { invoiceId: savedId });
+            Alert.alert('Success', 'Invoice saved successfully', [
+                { text: 'OK', onPress: () => navigation.replace('InvoiceDetail', { invoiceId: savedInvoice.id, autoPreview: true }) }
+            ]);
+
         } catch (error: any) {
-            console.error('Error saving invoice:', error);
-            Alert.alert('Error', 'Failed to save invoice: ' + error.message);
-            setLoading(false);
+            console.error('Save error:', error);
+            Alert.alert('Error', error.message || 'Failed to save invoice');
+        } finally {
+            setSaving(false);
         }
     };
 
-    const selectedClientObj = clients.find(c => c.id === formData.client_id);
+    const onDateChange = (event: any, selectedDate?: Date) => {
+        setShowDatePicker(false);
+        if (selectedDate) {
+            if (datePickerMode === 'issue') setIssueDate(selectedDate);
+            else setDueDate(selectedDate);
+        }
+    };
+
+    const handlePreview = async () => {
+        if (!selectedClient) {
+            Alert.alert('Error', 'Please select a client to preview');
+            return;
+        }
+
+        const totals = calculateTotals();
+        const companyId = profile?.active_company_id || profile?.company_id || user?.id;
+
+        // Mock invoice data for preview
+        const invoiceData: any = {
+            company: {
+                name: profile?.company_name || 'My Company',
+                address: profile?.address || '',
+                city: profile?.city || '',
+                country: profile?.country || '',
+                email: profile?.email || '',
+                phone: profile?.phone || '',
+                logoUrl: profile?.logo_url,
+                bankName: profile?.bank_name,
+                bankAccount: profile?.bank_account,
+                bankIban: profile?.bank_iban,
+                bankSwift: profile?.bank_swift,
+                primaryColor: profile?.primary_color || '#818cf8',
+            },
+            client: {
+                name: selectedClient.name,
+                address: selectedClient.address || '',
+                city: selectedClient.city || '',
+                country: selectedClient.country || '',
+                email: selectedClient.email || '',
+                phone: selectedClient.phone || '',
+                taxId: selectedClient.tax_id,
+            },
+            details: {
+                number: invoiceNumber,
+                issueDate: issueDate.toISOString().split('T')[0],
+                dueDate: dueDate ? dueDate.toISOString().split('T')[0] : '',
+                currency: profile?.currency || 'EUR',
+                notes: notes,
+                type: type,
+                status: 'draft',
+            },
+            items: items.map(item => ({
+                description: item.description || '',
+                quantity: item.quantity || 0,
+                price: item.unit_price || 0,
+                total: item.amount || 0,
+                unit: item.unit || 'pcs'
+            })),
+            summary: {
+                subtotal: totals.subtotal,
+                tax: totals.tax,
+                discount: totals.discount,
+                total: totals.total,
+                discountPercent: parseFloat(discount) || 0,
+            }
+        };
+
+        const html = generateInvoiceHtml(invoiceData, 'hidroterm');
+        setPreviewHtml(html);
+        setShowPreview(true);
+    };
+
+    const totals = calculateTotals();
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.container, { backgroundColor: bgColor }]}>
+        <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={safeGoBack} style={styles.backButton}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.title, { color: textColor }]}>
-                        {isEditing ? `${t('edit', language)} ${currentConfig.title}` : `${t('create', language)} ${currentConfig.title}`}
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>
+                        {invoiceId ? 'Edit Document' : `New ${type === 'offer' ? 'Offer' : 'Invoice'}`}
                     </Text>
-                    {!isEditing && (
-                        <Text style={[styles.subtitle, { color: mutedColor }]}>
-                            {formData.type === 'invoice' ? t('invoices', language) : t('offers', language)} • {formData.subtype}
-                        </Text>
-                    )}
+                    <Text style={[styles.title, { color: textColor }]}>
+                        {invoiceId ? invoiceNumber : 'Create New'}
+                    </Text>
                 </View>
-                <View style={[styles.typeBadge, { backgroundColor: `${currentConfig.color}20` }]}>
-                    <Text style={[styles.typeBadgeText, { color: currentConfig.color }]}>{currentConfig.prefix}</Text>
-                </View>
-                <TouchableOpacity
-                    onPress={safeGoBack}
-                    style={[styles.cancelButton, { backgroundColor: isDark ? '#334155' : '#f1f5f9' }]}
-                >
-                    <Text style={[styles.cancelButtonText, { color: mutedColor }]}>Cancel</Text>
-                </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-                {/* Status Selector */}
-                <View style={styles.statusContainer}>
-                    <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>{t('status', language)}</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                        {currentConfig.statusOptions.map(s => (
-                            <TouchableOpacity
-                                key={s}
-                                style={[
-                                    styles.statusChip,
-                                    { backgroundColor: inputBg },
-                                    formData.status === s && { backgroundColor: currentConfig.color }
-                                ]}
-                                onPress={() => setFormData({ ...formData, status: s })}
-                            >
-                                <Text style={[styles.statusText, { color: formData.status === s ? '#fff' : mutedColor }]}>
-                                    {t(s as any, language).toUpperCase()}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={0}
+            >
+                <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
 
-
-                {/* Details Section */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <View style={styles.sectionHeader}>
-                        <FileText color={currentConfig.color} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('invoiceNumber', language)}</Text>
-                    </View>
-                    <Input
-                        label={t('invoiceNumber', language)}
-                        value={formData.invoice_number}
-                        onChangeText={t => setFormData({ ...formData, invoice_number: t })}
-                    />
-                    <View style={styles.row}>
-                        <View style={styles.half}>
-                            <Input label={t('issueDate', language)} value={formData.issue_date} onChangeText={t => setFormData({ ...formData, issue_date: t })} placeholder="YYYY-MM-DD" />
-                        </View>
-                        {currentConfig.showDueDate && (
-                            <View style={styles.half}>
-                                <Input label={t('dueDate', language)} value={formData.due_date} onChangeText={t => setFormData({ ...formData, due_date: t })} placeholder="YYYY-MM-DD" />
-                            </View>
-                        )}
-                    </View>
-                </View>
-
-                {/* Recurring Section */}
-                {currentConfig.showRecurring && (
-                    <View style={[styles.section, { backgroundColor: cardBg }]}>
-                        <View style={styles.sectionHeader}>
-                            <RefreshCw color={primaryColor} size={20} />
-                            <Text style={[styles.sectionTitle, { color: textColor }]}>Recurring Invoice</Text>
-                            <Switch value={formData.is_recurring} onValueChange={v => setFormData({ ...formData, is_recurring: v })} />
-                        </View>
-                        {formData.is_recurring && (
-                            <View style={styles.intervalGrid}>
-                                {intervals.map(int => (
-                                    <TouchableOpacity
-                                        key={int.value}
-                                        style={[styles.intervalChip, { backgroundColor: inputBg }, formData.recurring_interval === int.value && { backgroundColor: primaryColor }]}
-                                        onPress={() => setFormData({ ...formData, recurring_interval: int.value })}
-                                    >
-                                        <Text style={[styles.intervalText, { color: formData.recurring_interval === int.value ? '#fff' : mutedColor }]}>{int.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                )}
-
-                {/* Client Section */}
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <View style={styles.sectionHeader}>
-                        <User color="#10b981" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('client', language)}</Text>
-                    </View>
-                    <View style={styles.row}>
-                        <TouchableOpacity style={[styles.picker, { backgroundColor: inputBg, flex: 1 }]} onPress={() => setShowClientPicker(!showClientPicker)}>
-                            <Text style={{ color: selectedClientObj ? textColor : mutedColor }}>{selectedClientObj?.name || t('selectClient', language as any) || 'Select Client'}</Text>
-                            <ChevronDown color={mutedColor} size={18} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.smallActionBtn, { backgroundColor: '#10b98120' }]}
-                            onPress={() => setShowQuickClient(true)}
-                        >
-                            <Plus color="#10b981" size={20} />
-                        </TouchableOpacity>
-                    </View>
-                    {showClientPicker && (
-                        <View style={styles.pickerList}>
-                            {clients.map(c => (
-                                <TouchableOpacity key={c.id} style={styles.pickerItem} onPress={() => { setFormData({ ...formData, client_id: c.id }); setShowClientPicker(false); }}>
-                                    <Text style={{ color: textColor }}>{c.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                </View>
-
-                {/* Line Items */}
-                <View style={styles.sectionDivider}>
-                    <Text style={[styles.labelGroup, { color: textColor }]}>{t('items', language)}</Text>
-                </View>
-
-                {lineItems.map((item, idx) => (
-                    <Card key={item.id} style={styles.itemCard}>
-                        <View style={styles.itemHeader}>
-                            <Text style={styles.itemCount}>ITEM {idx + 1}</Text>
-                            <View style={styles.row}>
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        setActiveRowId(item.id);
-                                        setShowScanner(true);
-                                    }}
-                                    style={styles.iconActionBtn}
-                                >
-                                    <Barcode color={currentConfig.color} size={18} />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => removeLineItem(item.id)} style={styles.iconActionBtn}>
-                                    <Trash2 color="#ef4444" size={18} />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                        <View style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Input
-                                    label={t('description', language)}
-                                    value={item.description}
-                                    onChangeText={t => {
-                                        updateLineItem(item.id, 'description', t);
-                                        if (t.length > 1) setShowProductDropdown(item.id);
-                                        else setShowProductDropdown(null);
-                                    }}
-                                    onFocus={() => {
-                                        if (item.description.length > 0) setShowProductDropdown(item.id);
-                                    }}
-                                />
-                                {showProductDropdown === item.id && (
-                                    <View style={[styles.productDropdown, { backgroundColor: cardBg, borderColor }]}>
-                                        <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
-                                            {products.filter(p =>
-                                                p.name.toLowerCase().includes(item.description.toLowerCase()) ||
-                                                p.sku?.toLowerCase().includes(item.description.toLowerCase()) ||
-                                                p.barcode?.includes(item.description)
-                                            ).map(p => (
-                                                <TouchableOpacity
-                                                    key={p.id}
-                                                    style={[styles.productDropdownItem, { borderBottomColor: borderColor }]}
-                                                    onPress={() => selectProduct(item, p)}
-                                                >
-                                                    <View>
-                                                        <Text style={{ color: textColor, fontWeight: 'bold' }}>{p.name}</Text>
-                                                        <Text style={{ color: mutedColor, fontSize: 10 }}>{p.sku || p.barcode || ''} • {formatCurrency(Number(p.unit_price))}</Text>
-                                                    </View>
-                                                </TouchableOpacity>
-                                            ))}
-                                            <TouchableOpacity
-                                                style={[styles.productDropdownItem, { borderBottomWidth: 0 }]}
-                                                onPress={() => {
-                                                    setActiveRowId(item.id);
-                                                    setShowQuickProduct(true);
-                                                    setShowProductDropdown(null);
-                                                }}
-                                            >
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                    <Plus color={primaryColor} size={16} />
-                                                    <Text style={{ color: primaryColor, fontWeight: 'bold' }}>{t('addItem', language)}</Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        </ScrollView>
-                                    </View>
-                                )}
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.smallActionBtn, { marginTop: 24, backgroundColor: `${currentConfig.color}10` }]}
-                                onPress={() => {
-                                    setActiveRowId(item.id);
-                                    setShowQuickProduct(true);
-                                }}
-                            >
-                                <Plus color={currentConfig.color} size={20} />
-                            </TouchableOpacity>
-                        </View>
+                    {/* General Info */}
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>Details</Text>
+                    <Card style={styles.card}>
+                        <Input
+                            label="Document Number"
+                            value={invoiceNumber}
+                            onChangeText={setInvoiceNumber}
+                            placeholder="INV-2024-001"
+                            containerStyle={{ marginBottom: 12 }}
+                        />
 
                         <View style={styles.row}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                                <Input
-                                    label="SKU / Code"
-                                    value={item.sku || ''}
-                                    onChangeText={t => updateLineItem(item.id, 'sku', t)}
-                                    placeholder="Optional"
-                                />
+                                <Text style={[styles.label, { color: mutedColor }]}>Issue Date</Text>
+                                <TouchableOpacity
+                                    style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                    onPress={() => { setDatePickerMode('issue'); setShowDatePicker(true); }}
+                                >
+                                    <Calendar color={mutedColor} size={18} />
+                                    <Text style={[styles.dateText, { color: textColor }]}>
+                                        {issueDate.toLocaleDateString()}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
-                            <View style={{ flex: 0.8 }}>
-                                <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>{t('quantity', language)}</Text>
-                                <View style={styles.qtyContainer}>
-                                    <TouchableOpacity
-                                        style={[styles.qtyBtn, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}
-                                        onPress={() => updateLineItem(item.id, 'quantity', Math.max(1, item.quantity - 1))}
-                                    >
-                                        <Minus color={textColor} size={16} />
-                                    </TouchableOpacity>
-                                    <TextInput
-                                        style={[styles.qtyInput, { backgroundColor: inputBg, color: textColor }]}
-                                        value={String(item.quantity)}
-                                        onChangeText={(t: string) => updateLineItem(item.id, 'quantity', Number(t) || 1)}
-                                        keyboardType="numeric"
-                                        textAlign="center"
-                                    />
-                                    <TouchableOpacity
-                                        style={[styles.qtyBtn, { backgroundColor: currentConfig.color }]}
-                                        onPress={() => updateLineItem(item.id, 'quantity', item.quantity + 1)}
-                                    >
-                                        <Plus color="#fff" size={16} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View style={[styles.row, { marginTop: 10 }]}>
-                            <View style={{ flex: 1.5 }}>
-                                <Input label={t('price', language)} value={String(item.unit_price)} onChangeText={t => updateLineItem(item.id, 'unit_price', Number(t) || 0)} keyboardType="numeric" />
-                            </View>
-                            <View style={{ width: 70, marginLeft: 8 }}>
-                                <Input label="Disc %" value={String(item.discount || 0)} onChangeText={t => updateLineItem(item.id, 'discount', Number(t) || 0)} keyboardType="numeric" />
-                            </View>
-                            <View style={{ width: 60, marginLeft: 8 }}>
-                                <Input label="Tvsh %" value={String(item.tax_rate || 18)} onChangeText={t => updateLineItem(item.id, 'tax_rate', Number(t) || 0)} keyboardType="numeric" />
-                            </View>
-                        </View>
-
-                        <View style={styles.itemFooter}>
-                            <View style={styles.unitSelector}>
-                                {units.map(u => (
-                                    <TouchableOpacity
-                                        key={u}
-                                        style={[
-                                            styles.unitChip,
-                                            { borderColor: borderColor },
-                                            item.unit === u && { backgroundColor: `${currentConfig.color}20`, borderColor: currentConfig.color }
-                                        ]}
-                                        onPress={() => updateLineItem(item.id, 'unit', u)}
-                                    >
-                                        <Text style={[styles.unitText, { color: item.unit === u ? currentConfig.color : mutedColor }]}>{u}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                            <View style={styles.itemTotal}>
-                                <Text style={{ color: currentConfig.color, fontWeight: '800', fontSize: 16 }}>{formatCurrency(item.amount)}</Text>
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                                <Text style={[styles.label, { color: mutedColor }]}>Due Date</Text>
+                                <TouchableOpacity
+                                    style={[styles.dateButton, { backgroundColor: cardBg, borderColor }]}
+                                    onPress={() => { setDatePickerMode('due'); setShowDatePicker(true); }}
+                                >
+                                    <Calendar color={mutedColor} size={18} />
+                                    <Text style={[styles.dateText, { color: textColor }]}>
+                                        {dueDate ? dueDate.toLocaleDateString() : 'Set Due Date'}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     </Card>
-                ))}
 
-                <Button
-                    title={t('addItem', language)}
-                    variant="secondary"
-                    icon={Plus}
-                    onPress={addLineItem}
-                    style={{ marginBottom: 24, borderStyle: 'dashed', borderWidth: 1 }}
-                />
-
-                {/* Summary Section */}
-                <Card style={[styles.summaryCard, { borderLeftColor: currentConfig.color, borderLeftWidth: 4 }]}>
-                    <SummaryRow label={t('subtotal', language)} value={formatCurrency(calculateSubtotal())} color={textColor} />
-
-                    {currentConfig.showTax && (
-                        <SummaryRow label={t('tax', language)} value={formatCurrency(calculateTax())} color={textColor} />
-                    )}
-
-                    {currentConfig.showDiscount && (
-                        <View style={styles.discountBox}>
-                            <Text style={[styles.tinyLabel, { color: mutedColor }]}>{t('discount', language)}</Text>
-                            <View style={styles.row}>
-                                <View style={{ flex: 1 }}><Input label="%" value={String(formData.discount_percent || '')} onChangeText={t => setFormData({ ...formData, discount_percent: Number(t) || 0 })} keyboardType="numeric" /></View>
-                                <View style={{ flex: 1 }}><Input label={t('total', language)} value={String(formData.discount_amount || '')} onChangeText={t => setFormData({ ...formData, discount_amount: Number(t) || 0 })} keyboardType="numeric" /></View>
-                            </View>
-                        </View>
-                    )}
-
-                    <SummaryRow label={t('total', language)} value={formatCurrency(calculateTotal())} color={currentConfig.color} isLarge />
-
-                    {/* Payment Method Selector */}
-                    <View style={[styles.divider, { marginVertical: 12 }]} />
-                    <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 8 }]}>{t('paymentMethod', language)}</Text>
-                    <View style={styles.paymentMethodsRow}>
-                        {(['bank', 'cash', 'card'] as PaymentMethod[]).map((method) => (
-                            <TouchableOpacity
-                                key={method}
-                                style={[
-                                    styles.paymentMethodChip,
-                                    { borderColor: borderColor },
-                                    formData.payment_method === method && { backgroundColor: `${currentConfig.color}20`, borderColor: currentConfig.color }
-                                ]}
-                                onPress={() => setFormData({ ...formData, payment_method: method })}
-                            >
-                                <Text style={[styles.paymentMethodText, { color: formData.payment_method === method ? currentConfig.color : mutedColor }]}>
-                                    {t(method as any, language)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {formData.payment_method === 'cash' && (
-                        <View style={styles.cashCalculation}>
-                            <View style={styles.row}>
+                    {/* Client Selection */}
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>Client</Text>
+                    <Card style={styles.card}>
+                        {selectedClient ? (
+                            <View style={styles.selectedClient}>
+                                <View style={[styles.clientIcon, { backgroundColor: 'rgba(99,102,241,0.1)' }]}>
+                                    <User color="#6366f1" size={24} />
+                                </View>
                                 <View style={{ flex: 1 }}>
-                                    <Input
-                                        label={t('amountReceived', language)}
-                                        value={String(formData.amount_received || '')}
-                                        onChangeText={t => setFormData({ ...formData, amount_received: Number(t) || 0 })}
-                                        keyboardType="numeric"
-                                    />
+                                    <Text style={[styles.clientName, { color: textColor }]}>{selectedClient.name}</Text>
+                                    <Text style={[styles.clientDetail, { color: mutedColor }]}>{selectedClient.email || 'No email'}</Text>
                                 </View>
-                                <View style={{ flex: 1, paddingLeft: 12 }}>
-                                    <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 4 }]}>{t('change', language)}</Text>
-                                    <Text style={[styles.changeValue, { color: textColor }]}>{formatCurrency(calculateChange())}</Text>
-                                </View>
+                                <TouchableOpacity onPress={() => setSelectedClient(null)} style={styles.removeClient}>
+                                    <Trash2 color="#ef4444" size={18} />
+                                </TouchableOpacity>
                             </View>
-                        </View>
-                    )}
-                </Card>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.addClientButton, { borderColor, borderStyle: 'dashed' }]}
+                                onPress={() => setShowClientPicker(true)}
+                            >
+                                <Plus color={primaryColor} size={20} />
+                                <Text style={[styles.addClientText, { color: textColor }]}>Select Client</Text>
+                            </TouchableOpacity>
+                        )}
+                    </Card>
 
-                <View style={[styles.section, { backgroundColor: cardBg }]}>
-                    <Input label={t('notes', language)} value={formData.notes} onChangeText={t => setFormData({ ...formData, notes: t })} multiline />
-                </View>
-
-                {/* Buyer Signature Section */}
-                {currentConfig.showSignature && (
-                    <View style={[styles.section, { backgroundColor: cardBg }]}>
-                        <View style={styles.sectionHeader}>
-                            <Contact color="#ec4899" size={20} />
-                            <Text style={[styles.sectionTitle, { color: textColor }]}>Buyer Signature</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={[styles.signatureBox, { backgroundColor: inputBg, borderColor: isDark ? '#334155' : '#cbd5e1' }]}
-                            onPress={pickBuyerSignature}
-                        >
-                            {formData.buyer_signature_url ? (
-                                <View style={styles.signaturePreviewContainer}>
-                                    {formData.buyer_signature_url.startsWith('data:image/svg+xml') ? (
-                                        <View style={{ width: 100, height: 40 }}>
-                                            <SvgXml xml={decodeURIComponent(formData.buyer_signature_url.split(',')[1])} width="100%" height="100%" />
-                                        </View>
-                                    ) : (
-                                        <ImageIcon color={textColor} size={24} style={styles.signaturePreviewImg} />
-                                    )}
-                                    <Text style={{ color: textColor, fontWeight: 'bold' }}>Signature Captured</Text>
-                                    <TouchableOpacity style={styles.clearSignature} onPress={() => setFormData(prev => ({ ...prev, buyer_signature_url: '' }))}>
-                                        <Trash2 color="#ef4444" size={16} />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <View style={styles.uploadPlaceholder}>
-                                    <TouchableOpacity
-                                        style={[styles.smallActionBtnRow, { backgroundColor: currentConfig.color, marginBottom: 12, paddingVertical: 12, minWidth: 180, justifyContent: 'center' }]}
-                                        onPress={() => setShowSignaturePad(true)}
-                                    >
-                                        <FileSignature color="#fff" size={20} />
-                                        <Text style={{ color: '#fff', marginLeft: 8, fontWeight: 'bold', fontSize: 16 }}>Sign Here</Text>
-                                    </TouchableOpacity>
-
-                                    <Text style={{ color: mutedColor, marginVertical: 4 }}>- OR -</Text>
-
-                                    <TouchableOpacity
-                                        onPress={pickBuyerSignature}
-                                        style={{ alignItems: 'center' }}
-                                    >
-                                        <Camera color={mutedColor} size={24} />
-                                        <Text style={{ color: mutedColor, fontSize: 13, marginTop: 4 }}>Upload Image</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
+                    {/* Items */}
+                    <View style={styles.itemsHeader}>
+                        <Text style={[styles.sectionTitle, { color: textColor, marginBottom: 0 }]}>Items</Text>
+                        <TouchableOpacity onPress={() => setShowProductPicker(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Plus color={primaryColor} size={16} />
+                            <Text style={{ color: primaryColor, fontWeight: '600', marginLeft: 4 }}>Add Item</Text>
                         </TouchableOpacity>
                     </View>
-                )}
 
-                {/* Paper Size Selector */}
-                <Card style={[styles.section, { backgroundColor: cardBg }]}>
-                    <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 12 }]}>{t('paperSize', language) || 'Paper Size'}</Text>
-                    {isFiscalInvoice ? (
-                        <View style={styles.paymentMethodsRow}>
-                            <View style={[styles.paymentMethodChip, { borderColor: primaryColor, backgroundColor: `${primaryColor}15` }]}>
-                                <Text style={[styles.paymentMethodText, { color: primaryColor }]}>A4 (Dokument Fiskal)</Text>
+                    <Card style={[styles.card, { padding: 0 }]}>
+                        {items.length === 0 ? (
+                            <View style={styles.emptyItems}>
+                                <Text style={{ color: mutedColor }}>No items added yet</Text>
+                                <Button
+                                    title="Add from Products"
+                                    onPress={() => setShowProductPicker(true)}
+                                    variant="outline"
+                                    style={{ marginTop: 12, borderWidth: 0 }}
+                                />
                             </View>
-                        </View>
-                    ) : (
-                        <View style={styles.paymentMethodsRow}>
-                            {['A4', 'A5', 'Receipt'].map(size => (
-                                <TouchableOpacity
-                                    key={size}
-                                    style={[
-                                        styles.paymentMethodChip,
-                                        { borderColor: formData.paper_size === size ? primaryColor : borderColor, backgroundColor: formData.paper_size === size ? `${primaryColor}15` : 'transparent' }
-                                    ]}
-                                    onPress={() => setFormData(prev => ({ ...prev, paper_size: size as any }))}
-                                >
-                                    <Text style={[styles.paymentMethodText, { color: formData.paper_size === size ? primaryColor : mutedColor }]}>{size}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                </Card>
+                        ) : (
+                            items.map((item, index) => (
+                                <View key={index} style={[styles.itemRow, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
+                                    <View style={styles.itemHeader}>
+                                        <TextInput
+                                            style={[styles.itemDescInput, { color: textColor }]}
+                                            value={item.description}
+                                            onChangeText={(text) => handleUpdateItem(index, 'description', text)}
+                                            placeholder="Description"
+                                            placeholderTextColor={mutedColor}
+                                        />
+                                        <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+                                            <Trash2 color="#ef4444" size={18} />
+                                        </TouchableOpacity>
+                                    </View>
 
-                <Button
-                    title={showPreview ? "Hide Preview" : "Show On-Screen Preview"}
-                    variant="outline"
-                    onPress={() => setShowPreview(!showPreview)}
-                    style={{ marginBottom: 16 }}
-                />
-
-                {showPreview && (
-                    <Card style={[styles.previewCard, { backgroundColor: '#fff' }]}>
-                        <View style={[styles.previewDocument, getPreviewStyles()]}>
-                            {/* Header */}
-                            <View style={styles.previewHeader}>
-                                <View style={styles.previewCompany}>
-                                    <Text style={styles.previewCompanyName}>{profile?.company_name || 'My Business'}</Text>
-                                    <Text style={styles.previewCompanyInfo}>{profile?.email}</Text>
-                                    <Text style={styles.previewCompanyInfo}>{profile?.phone}</Text>
+                                    <View style={styles.itemInputs}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Qty</Text>
+                                            <TextInput
+                                                style={[styles.smallInput, { color: textColor, borderColor }]}
+                                                value={String(item.quantity || '')}
+                                                onChangeText={(text) => handleUpdateItem(index, 'quantity', Number(text))}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Price</Text>
+                                            <TextInput
+                                                style={[styles.smallInput, { color: textColor, borderColor }]}
+                                                value={String(item.unit_price || '')}
+                                                onChangeText={(text) => handleUpdateItem(index, 'unit_price', Number(text))}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={[styles.inputLabel, { color: mutedColor, textAlign: 'right' }]}>Total</Text>
+                                            <Text style={[styles.itemRowTotal, { color: textColor }]}>
+                                                {formatCurrency(Number(item.amount), profile?.currency)}
+                                            </Text>
+                                        </View>
+                                    </View>
                                 </View>
-                                {profile?.logo_url && (
-                                    <View style={styles.previewLogo}>
-                                        <Text style={{ fontSize: 8 }}>LOGO</Text>
+                            ))
+                        )}
+
+                        {items.length > 0 && (
+                            <View style={[styles.summaryFooter, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#f9fafb', borderTopColor: borderColor }]}>
+                                <View style={styles.summaryRow}>
+                                    <Text style={{ color: mutedColor }}>Subtotal</Text>
+                                    <Text style={{ color: textColor, fontWeight: '600' }}>{formatCurrency(totals.subtotal, profile?.currency)}</Text>
+                                </View>
+                                <View style={styles.summaryRow}>
+                                    <Text style={{ color: mutedColor }}>Tax</Text>
+                                    <Text style={{ color: textColor, fontWeight: '600' }}>{formatCurrency(totals.tax, profile?.currency)}</Text>
+                                </View>
+                                <View style={[styles.summaryRow, { marginTop: 8 }]}>
+                                    <Text style={{ color: primaryColor, fontWeight: '800', fontSize: 18 }}>{formatCurrency(totals.total, profile?.currency)}</Text>
+                                </View>
+
+                                {items.length > 0 && (
+                                    <View style={[styles.summaryRow, { marginTop: 12, alignItems: 'center' }]}>
+                                        <Text style={{ color: mutedColor }}>Discount (%)</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: 8, borderWidth: 1, borderColor }}>
+                                            <TextInput
+                                                value={discount}
+                                                onChangeText={setDiscount}
+                                                keyboardType="numeric"
+                                                style={{ paddingVertical: 4, paddingHorizontal: 8, color: textColor, fontWeight: '600', minWidth: 60, textAlign: 'right' }}
+                                            />
+                                            <Text style={{ paddingRight: 8, color: mutedColor }}>%</Text>
+                                        </View>
+                                    </View>
+                                )}
+                                {totals.discount > 0 && (
+                                    <View style={styles.summaryRow}>
+                                        <Text style={{ color: '#ef4444' }}>Discount Amount</Text>
+                                        <Text style={{ color: '#ef4444', fontWeight: '600' }}>-{formatCurrency(totals.discount, profile?.currency)}</Text>
                                     </View>
                                 )}
                             </View>
-
-                            <View style={styles.previewDivider} />
-
-                            {/* Client & Invoice Info */}
-                            <View style={styles.previewSplit}>
-                                <View style={styles.previewHalf}>
-                                    <Text style={styles.previewLabel}>BILL TO:</Text>
-                                    <Text style={styles.previewValue}>{clients.find(c => c.id === formData.client_id)?.name || 'Guest Client'}</Text>
-                                </View>
-                                <View style={[styles.previewHalf, { alignItems: 'flex-end' }]}>
-                                    <Text style={styles.previewLabel}>{currentConfig.title.toUpperCase()}</Text>
-                                    <Text style={styles.previewValue}>#{formData.invoice_number}</Text>
-                                    <Text style={styles.previewLabel}>DATE: {formData.issue_date}</Text>
-                                </View>
-                            </View>
-
-                            {/* Items */}
-                            <View style={styles.previewTable}>
-                                <View style={styles.previewTableRow}>
-                                    <Text style={[styles.previewTableHeader, { flex: 2 }]}>Description</Text>
-                                    <Text style={[styles.previewTableHeader, { flex: 1, textAlign: 'right' }]}>Qty</Text>
-                                    <Text style={[styles.previewTableHeader, { flex: 1, textAlign: 'right' }]}>Total</Text>
-                                </View>
-                                {lineItems.map((item, idx) => (
-                                    <View key={idx} style={styles.previewTableRow}>
-                                        <Text style={[styles.previewTableData, { flex: 2 }]} numberOfLines={1}>{item.description || '...'}</Text>
-                                        <Text style={[styles.previewTableData, { flex: 1, textAlign: 'right' }]}>{item.quantity}</Text>
-                                        <Text style={[styles.previewTableData, { flex: 1, textAlign: 'right' }]}>{formatCurrency(item.amount)}</Text>
-                                    </View>
-                                ))}
-                            </View>
-
-                            {/* Summary */}
-                            <View style={[styles.previewSplit, { marginTop: 15 }]}>
-                                <View style={styles.previewHalf}>
-                                    {formData.payment_method === 'cash' && (
-                                        <View>
-                                            <Text style={styles.previewLabel}>PAYMENT: CASH</Text>
-                                            <Text style={styles.previewLabel}>CHANGE: {formatCurrency(calculateChange())}</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <View style={[styles.previewHalf, { alignItems: 'flex-end' }]}>
-                                    <View style={styles.previewSummaryRow}>
-                                        <Text style={styles.previewSummaryLabel}>Total:</Text>
-                                        <Text style={styles.previewSummaryValue}>{formatCurrency(calculateTotal())}</Text>
-                                    </View>
-                                </View>
-                            </View>
-
-                            {/* Signatures */}
-                            <View style={[styles.previewSplit, { marginTop: 20 }]}>
-                                <View style={[styles.previewHalf, { alignItems: 'center' }]}>
-                                    <View style={styles.previewSignLine} />
-                                    <Text style={styles.previewSignLabel}>Seller</Text>
-                                </View>
-                                <View style={[styles.previewHalf, { alignItems: 'center' }]}>
-                                    <View style={styles.previewSignLine} />
-                                    <Text style={styles.previewSignLabel}>Buyer</Text>
-                                </View>
-                            </View>
-                        </View>
+                        )}
                     </Card>
-                )}
 
-                <Button
-                    title={isEditing ? t('saveChanges', language) : `${t('create', language)} ${currentConfig.title}`}
+                    {/* Notes */}
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>Notes</Text>
+                    <Card style={[styles.card, { marginBottom: 120 }]}>
+                        <TextInput
+                            style={[styles.notesInput, { color: textColor, borderColor }]}
+                            value={notes}
+                            onChangeText={setNotes}
+                            placeholder="Add payment terms or notes..."
+                            placeholderTextColor={mutedColor}
+                            multiline
+                            numberOfLines={4}
+                            textAlignVertical="top"
+                        />
+                    </Card>
+
+                </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* Sticky Actions Footer */}
+            <View style={[styles.footer, { backgroundColor: isDark ? '#1e293b' : '#fff', borderTopColor: borderColor }]}>
+                <TouchableOpacity
+                    style={[styles.previewButton, { borderColor: borderColor }]}
+                    onPress={handlePreview}
+                >
+                    <Eye color={textColor} size={20} />
+                    <Text style={[styles.previewText, { color: textColor }]}>Preview</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.saveButtonFull, { backgroundColor: primaryColor }]}
                     onPress={handleSave}
-                    loading={loading}
-                    style={{ marginTop: 10 }}
+                    disabled={saving}
+                >
+                    {saving ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                        <>
+                            <Save color="#fff" size={20} />
+                            <Text style={styles.saveText}>{invoiceId ? 'Update' : 'Create'} {type === 'offer' ? 'Offer' : 'Invoice'}</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Preview Modal */}
+            <Modal visible={showPreview} animationType="slide" presentationStyle="pageSheet">
+                <View style={[styles.previewContainer, { backgroundColor: bgColor }]}>
+                    <View style={[styles.previewHeader, { borderBottomColor: borderColor, backgroundColor: cardBg }]}>
+                        <TouchableOpacity onPress={() => setShowPreview(false)} style={styles.closePreview}>
+                            <X color={textColor} size={24} />
+                            <Text style={[styles.closePreviewText, { color: textColor }]}>Close Preview</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.headerSaveButton, { backgroundColor: primaryColor }]}
+                            onPress={() => { setShowPreview(false); handleSave(); }}
+                        >
+                            <Save color="#fff" size={16} />
+                            <Text style={{ color: '#fff', fontWeight: '600', marginLeft: 6 }}>Save</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <WebView
+                        source={{ html: previewHtml }}
+                        style={{ flex: 1 }}
+                        originWhitelist={['*']}
+                    />
+                </View>
+            </Modal>
+
+            {/* Client Picker Modal */}
+            <Modal visible={showClientPicker} animationType="slide" transparent>
+                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1e293b' : '#fff' }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>Select Client</Text>
+                            <TouchableOpacity onPress={() => setShowClientPicker(false)}>
+                                <Text style={{ color: primaryColor, fontSize: 16 }}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ padding: 12 }}>
+                            <Input
+                                placeholder="Search clients..."
+                                value={clientSearch}
+                                onChangeText={setClientSearch}
+                            />
+                        </View>
+                        <ScrollView contentContainerStyle={{ padding: 12 }}>
+                            {clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).map(client => (
+                                <TouchableOpacity
+                                    key={client.id}
+                                    style={[styles.modalItem, { borderBottomColor: borderColor }]}
+                                    onPress={() => {
+                                        setSelectedClient(client);
+                                        // Auto-apply client discount if available
+                                        if (client.discount_percent) {
+                                            setDiscount(String(client.discount_percent));
+                                        } else {
+                                            setDiscount('0');
+                                        }
+                                        setShowClientPicker(false);
+                                    }}
+                                >
+                                    <View style={[styles.modalIcon, { backgroundColor: '#e0e7ff' }]}>
+                                        <Text style={{ color: '#4338ca', fontWeight: 'bold' }}>{client.name.charAt(0)}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.modalItemTitle, { color: textColor }]}>{client.name}</Text>
+                                        <Text style={{ color: mutedColor, fontSize: 12 }}>{client.email || 'No email'}</Text>
+                                    </View>
+                                    {selectedClient?.id === client.id && <Check color={primaryColor} size={20} />}
+                                </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity
+                                style={[styles.modalAddNew, { borderColor: primaryColor }]}
+                                onPress={() => {
+                                    setShowClientPicker(false);
+                                    navigation.navigate('ManagementTab', { screen: 'ClientForm' });
+                                }}
+                            >
+                                <Plus color={primaryColor} size={20} />
+                                <Text style={{ color: primaryColor, fontWeight: '600', marginLeft: 8 }}>Create New Client</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Product Picker Modal */}
+            <Modal visible={showProductPicker} animationType="slide" transparent>
+                <View style={[styles.modalOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)' }]}>
+                    <View style={[styles.modalContent, { backgroundColor: isDark ? '#1e293b' : '#fff' }]}>
+                        <View style={[styles.modalHeader, { borderBottomColor: borderColor }]}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>Add Item</Text>
+                            <TouchableOpacity onPress={() => setShowProductPicker(false)}>
+                                <Text style={{ color: primaryColor, fontSize: 16 }}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ padding: 12 }}>
+                            <Input
+                                placeholder="Search products..."
+                                value={productSearch}
+                                onChangeText={setProductSearch}
+                            />
+                        </View>
+                        <ScrollView contentContainerStyle={{ padding: 12 }}>
+                            <TouchableOpacity
+                                style={[styles.modalItem, { borderBottomColor: borderColor }]}
+                                onPress={() => handleAddItem()}
+                            >
+                                <View style={[styles.modalIcon, { backgroundColor: '#ecfdf5' }]}>
+                                    <Plus color="#10b981" size={20} />
+                                </View>
+                                <Text style={[styles.modalItemTitle, { color: textColor }]}>Custom Item</Text>
+                            </TouchableOpacity>
+
+                            {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(product => (
+                                <TouchableOpacity
+                                    key={product.id}
+                                    style={[styles.modalItem, { borderBottomColor: borderColor }]}
+                                    onPress={() => handleAddItem(product)}
+                                >
+                                    <View style={[styles.modalIcon, { backgroundColor: '#f3f4f6' }]}>
+                                        <Text style={{ color: '#4b5563', fontWeight: 'bold' }}>{product.name.charAt(0)}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.modalItemTitle, { color: textColor }]}>{product.name}</Text>
+                                        <Text style={{ color: mutedColor, fontSize: 12 }}>
+                                            {formatCurrency(Number(product.unit_price), profile?.currency)}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {showDatePicker && (
+                <DateTimePicker
+                    value={datePickerMode === 'issue' ? issueDate : (dueDate || new Date())}
+                    mode="date"
+                    display="default"
+                    onChange={onDateChange}
                 />
-            </ScrollView>
-
-            <SignaturePadModal
-                visible={showSignaturePad}
-                onClose={() => setShowSignaturePad(false)}
-                onSave={(sig) => setFormData(prev => ({ ...prev, buyer_signature_url: sig }))}
-                primaryColor={primaryColor}
-            />
-
-            <QuickAddModal
-                visible={showQuickClient}
-                onClose={() => setShowQuickClient(false)}
-                title="Quick Add Client"
-                onAdd={handleQuickAddClient}
-                fields={[
-                    { key: 'name', label: 'Client Name', placeholder: 'Acme Corp' },
-                    { key: 'email', label: 'Email', placeholder: 'client@example.com', keyboardType: 'email-address' },
-                    { key: 'phone', label: 'Phone', placeholder: '+1 234...', keyboardType: 'phone-pad' },
-                    { key: 'address', label: 'Address', placeholder: '123 Main St...', multiline: true },
-                ]}
-            />
-
-            <QuickAddModal
-                visible={showQuickProduct}
-                onClose={() => setShowQuickProduct(false)}
-                title="Quick Add Product"
-                onAdd={handleQuickAddProduct}
-                fields={[
-                    { key: 'name', label: 'Product Name', placeholder: 'Consultation' },
-                    { key: 'unit_price', label: 'Unit Price', placeholder: '0.00', keyboardType: 'decimal-pad' },
-                    { key: 'unit', label: 'Unit', placeholder: 'hrs' },
-                    { key: 'sku', label: 'SKU/Barcode', placeholder: 'Optional' },
-                ]}
-            />
-
-            <BarcodeScannerModal
-                visible={showScanner}
-                onClose={() => setShowScanner(false)}
-                onScanned={handleBarcodeScanned}
-            />
-        </KeyboardAvoidingView >
-    );
-}
-
-function SummaryRow({ label, value, color, isLarge }: any) {
-    return (
-        <View style={styles.summaryRow}>
-            <Text style={{ color: '#94a3b8', fontSize: isLarge ? 16 : 14 }}>{label}</Text>
-            <Text style={{ color: color, fontSize: isLarge ? 22 : 16, fontWeight: 'bold' }}>{value}</Text>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
     backButton: { marginRight: 16 },
-    title: { fontSize: 20, fontWeight: 'bold' },
-    subtitle: { fontSize: 12 },
-    typeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, minWidth: 40, alignItems: 'center' },
-    typeBadgeText: { fontSize: 12, fontWeight: '800' },
-    statusContainer: { paddingHorizontal: 16, marginBottom: 16 },
-    statusChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-    statusText: { fontSize: 10, fontWeight: 'bold' },
+    title: { fontSize: 28, fontWeight: '800' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    saveButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', elevation: 2 },
+
     scroll: { flex: 1 },
-    scrollContent: { padding: 16, paddingBottom: 60 },
-    section: { borderRadius: 16, padding: 16, marginBottom: 16 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
-    sectionDivider: { borderBottomWidth: 1, borderBottomColor: '#334155', marginVertical: 8, marginBottom: 16 },
-    row: { flexDirection: 'row', gap: 12 },
-    half: { flex: 1 },
-    intervalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-    intervalChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    activeInterval: { backgroundColor: '#6366f1' },
-    intervalText: { fontSize: 12, fontWeight: '600' },
-    picker: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderRadius: 12 },
-    pickerList: { marginTop: 8, gap: 4 },
-    pickerItem: { padding: 12, borderRadius: 8, backgroundColor: 'rgba(99, 102, 241, 0.05)' },
-    labelGroup: { fontSize: 18, fontWeight: 'bold', marginVertical: 12, color: '#fff' },
-    itemCard: { marginBottom: 16, padding: 16 },
-    itemHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    itemCount: { color: '#94a3b8', fontSize: 10, fontWeight: 'bold' },
-    itemFooter: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    unitSelector: { flexDirection: 'row', gap: 6 },
-    itemTotal: {},
-    tinyLabel: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-    unitChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
-    unitText: { fontSize: 10, fontWeight: 'bold' },
-    summaryCard: { padding: 20, marginBottom: 20 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8 },
-    discountBox: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, marginVertical: 8 },
-    saveButton: { marginTop: 16 },
-    smallActionBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+    scrollContent: { padding: 20, paddingBottom: 40 },
+
+    sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, marginTop: 16 },
+    card: { padding: 16, borderRadius: 16, marginBottom: 8 },
+
+    row: { flexDirection: 'row' },
+    label: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
+
+    dateButton: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, gap: 8 },
+    dateText: { fontSize: 14, fontWeight: '500' },
+
+    // Client
+    selectedClient: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    clientIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    clientName: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
+    clientDetail: { fontSize: 13 },
+    removeClient: { padding: 8 },
+    addClientButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderWidth: 1, borderRadius: 12, gap: 8 },
+    addClientText: { fontSize: 15, fontWeight: '600' },
+
+    // Items
+    itemsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 },
+    emptyItems: { padding: 30, alignItems: 'center', justifyContent: 'center' },
+    itemRow: { padding: 16 },
+    itemHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
+    itemDescInput: { flex: 1, fontSize: 15, fontWeight: '600', padding: 0 },
+    itemInputs: { flexDirection: 'row', gap: 12 },
+    smallInput: { borderWidth: 1, borderRadius: 8, padding: 8, fontSize: 14, marginTop: 4 },
+    inputLabel: { fontSize: 11, textTransform: 'uppercase' },
+    itemRowTotal: { fontSize: 15, fontWeight: '700', textAlign: 'right', marginTop: 12 },
+
+    summaryFooter: { padding: 16, borderTopWidth: 1 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+
+    // Notes
+    notesInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 100 },
+
+    // Modals
+    modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+    modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '80%', paddingBottom: 40 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1 },
+    modalTitle: { fontSize: 18, fontWeight: '700' },
+    modalItem: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16, borderBottomWidth: 1 },
+    modalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    modalItemTitle: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
+    modalAddNew: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, marginTop: 12, borderWidth: 1, borderRadius: 12, borderStyle: 'dashed' },
+
+    // Footer & Preview
+    footer: {
+        flexDirection: 'row',
+        padding: 16,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        borderTopWidth: 1,
+        gap: 12,
+        backgroundColor: '#fff',
+    },
+    previewButton: {
+        flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        height: 54,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'transparent',
+        gap: 8,
     },
-    iconActionBtn: {
-        padding: 8,
-        marginLeft: 8,
-    },
-    signatureBox: {
-        height: 160,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderStyle: 'dashed',
+    previewText: { fontSize: 16, fontWeight: '600' },
+    saveButtonFull: {
+        flex: 2,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        overflow: 'hidden',
+        height: 54,
+        borderRadius: 16,
+        gap: 8,
     },
-    uploadPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-    smallActionBtnRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-    signaturePreviewContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    signaturePreviewImg: { opacity: 0.5 },
-    clearSignature: { padding: 8 },
-    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    qtyBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    qtyInput: { flex: 1, height: 40, borderRadius: 10, paddingHorizontal: 12, fontSize: 16, fontWeight: '600' },
-    paymentMethodsRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
-    paymentMethodChip: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
-    paymentMethodText: { fontSize: 13, fontWeight: '700' },
-    cashCalculation: { marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
-    changeValue: { fontSize: 20, fontWeight: 'bold', marginTop: 8 },
-    divider: { height: 1, backgroundColor: '#334155', marginVertical: 16, opacity: 0.1 },
-    productDropdown: {
-        position: 'absolute',
-        top: 70,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
-        borderRadius: 12,
-        borderWidth: 1,
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-    },
-    productDropdownItem: {
-        padding: 12,
+    saveText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+    previewContainer: { flex: 1 },
+    previewHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        paddingTop: Platform.OS === 'ios' ? 16 : 16,
         borderBottomWidth: 1,
     },
-    previewCard: { padding: 30, marginBottom: 20, alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 16 },
-    previewDocument: { padding: 20, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
-    previewHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-    previewCompany: { flex: 1 },
-    previewCompanyName: { fontSize: 12, fontWeight: 'bold', color: '#1e293b' },
-    previewCompanyInfo: { fontSize: 8, color: '#64748b' },
-    previewLogo: { width: 30, height: 30, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', borderRadius: 4 },
-    previewDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 10 },
-    previewSplit: { flexDirection: 'row', justifyContent: 'space-between' },
-    previewHalf: { flex: 1 },
-    previewLabel: { fontSize: 7, color: '#94a3b8', fontWeight: 'bold' },
-    previewValue: { fontSize: 9, color: '#1e293b', fontWeight: 'bold', marginBottom: 2 },
-    previewTable: { marginTop: 10 },
-    previewTableRow: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: '#f1f5f9' },
-    previewTableHeader: { fontSize: 7, fontWeight: 'bold', color: '#64748b' },
-    previewTableData: { fontSize: 8, color: '#1e293b' },
-    previewSummaryRow: { flexDirection: 'row', alignItems: 'center' },
-    previewSummaryLabel: { fontSize: 10, fontWeight: 'bold', color: '#64748b', marginRight: 8 },
-    previewSummaryValue: { fontSize: 12, fontWeight: 'bold', color: '#6366f1' },
-    previewSignLine: { width: '80%', height: 1, backgroundColor: '#e2e8f0', marginTop: 15 },
-    previewSignLabel: { fontSize: 6, color: '#94a3b8', marginTop: 4 },
-    cancelButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginLeft: 8 },
-    cancelButtonText: { fontSize: 13, fontWeight: '600' },
+    closePreview: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    closePreviewText: { fontSize: 16, fontWeight: '600' },
+    headerSaveButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 10,
+    }
 });

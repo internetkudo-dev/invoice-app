@@ -16,11 +16,12 @@ import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, Input } from '../../components/common';
+import { t } from '../../i18n';
 import { ExpenseCategory } from '../../types';
 
 export function ExpenseFormScreen({ navigation, route }: any) {
     const { user } = useAuth();
-    const { isDark } = useTheme();
+    const { isDark, language } = useTheme();
     const expenseId = route.params?.expenseId;
     const isEditing = !!expenseId;
 
@@ -134,14 +135,41 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{isEditing ? 'Edit Expense' : 'New Expense'}</Text>
+                <Text style={[styles.title, { color: textColor }]}>
+                    {isEditing ? (t('edit', language) || 'Edit') + ' ' + (t('expense', language) || 'Expense') : (t('createNew', language) || 'New') + ' ' + (t('expense', language) || 'Expense')}
+                </Text>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+
+                {/* Card 1: Details */}
                 <Card style={styles.card}>
                     <View style={styles.sectionHeader}>
-                        <DollarSign color="#ef4444" size={20} />
+                        <FileText color="#6366f1" size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Transaction Details</Text>
+                    </View>
+
+                    <Input
+                        label="Date"
+                        value={formData.date}
+                        onChangeText={(text) => setFormData({ ...formData, date: text })}
+                        placeholder="YYYY-MM-DD"
+                    />
+
+                    <Input
+                        label="Description"
+                        value={formData.description}
+                        onChangeText={(text) => setFormData({ ...formData, description: text })}
+                        placeholder="What was this for?"
+                        multiline
+                    />
+                </Card>
+
+                {/* Card 2: Amount & Type */}
+                <Card style={styles.card}>
+                    <View style={styles.sectionHeader}>
+                        <DollarSign color="#10b981" size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Amount & Type</Text>
                     </View>
 
                     <View style={styles.typeToggle}>
@@ -178,7 +206,7 @@ export function ExpenseFormScreen({ navigation, route }: any) {
 
                     <View style={styles.categoryGrid}>
                         {Array.from(new Set([...(formData.type === 'expense' ? defaultCategories : incomeCategories), ...dynamicCategories]))
-                            .slice(0, 12) // Limit to top 12 to avoid clutter
+                            .slice(0, 12)
                             .map((cat) => (
                                 <TouchableOpacity
                                     key={cat}
@@ -197,26 +225,12 @@ export function ExpenseFormScreen({ navigation, route }: any) {
                                 </TouchableOpacity>
                             ))}
                     </View>
-
-                    <Input
-                        label="Date"
-                        value={formData.date}
-                        onChangeText={(text) => setFormData({ ...formData, date: text })}
-                        placeholder="YYYY-MM-DD"
-                    />
-
-                    <Input
-                        label="Description"
-                        value={formData.description}
-                        onChangeText={(text) => setFormData({ ...formData, description: text })}
-                        placeholder="What was this for?"
-                        multiline
-                    />
                 </Card>
 
+                {/* Card 3: Receipt */}
                 <Card style={styles.card}>
                     <View style={styles.sectionHeader}>
-                        <Camera color="#818cf8" size={20} />
+                        <Camera color="#f59e0b" size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Receipt / Proof</Text>
                     </View>
 
@@ -257,7 +271,7 @@ const styles = StyleSheet.create({
     card: { padding: 16, marginBottom: 16 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '600' },
-    label: { fontSize: 14, fontWeight: '500', marginBottom: 8 },
+    label: { fontSize: 14, fontWeight: '500', marginBottom: 8, marginTop: 12 },
     categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     categoryOption: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
     activeCategoryExpense: { backgroundColor: '#ef4444' },

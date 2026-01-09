@@ -234,9 +234,14 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>
-                    {isEditing ? 'Edit Bill' : t('newSupplierBill', language)}
-                </Text>
+                <View style={{ flex: 1 }}>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>
+                        {isEditing ? t('edit', language) : t('createNew', language)}
+                    </Text>
+                    <Text style={[styles.title, { color: textColor }]}>
+                        {t('supplierBill', language)}
+                    </Text>
+                </View>
                 <Button
                     title={t('save', language)}
                     onPress={handleSave}
@@ -437,9 +442,10 @@ export function SupplierBillFormScreen({ navigation, route }: SupplierBillFormSc
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { padding: 4 },
-    title: { fontSize: 20, fontWeight: 'bold' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 100 },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },

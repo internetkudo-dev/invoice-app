@@ -71,19 +71,47 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
             return;
         }
 
+        if (!user) {
+            Alert.alert(t('error', language), 'You must be logged in');
+            return;
+        }
+
         setLoading(true);
         try {
-            const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user?.id).single();
-            const companyId = profileData?.active_company_id || profileData?.company_id || user?.id;
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('company_id, active_company_id')
+                .eq('id', user.id)
+                .single();
+
+            // If profile fetch fails, we default companyId to user.id
+            const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
+
+            const payload = {
+                ...formData,
+                email: formData.email || null,
+                phone: formData.phone || null,
+                address: formData.address || null,
+                city: formData.city || null,
+                zip_code: formData.zip_code || null,
+                country: formData.country || null,
+                tax_id: formData.tax_id || null,
+                notes: formData.notes || null,
+                user_id: user.id,
+                company_id: companyId
+            };
 
             if (isEditing) {
-                await supabase.from('vendors').update(formData).eq('id', vendorId);
+                const { error } = await supabase.from('vendors').update(payload).eq('id', vendorId);
+                if (error) throw error;
             } else {
-                await supabase.from('vendors').insert({ ...formData, user_id: user?.id, company_id: companyId });
+                const { error } = await supabase.from('vendors').insert(payload);
+                if (error) throw error;
             }
             navigation.goBack();
-        } catch (error) {
-            Alert.alert(t('error', language), 'Failed to save vendor');
+        } catch (error: any) {
+            console.error('Error saving vendor:', error);
+            Alert.alert(t('error', language), error.message || 'Failed to save vendor');
         } finally {
             setLoading(false);
         }
@@ -98,9 +126,10 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>
-                    {isEditing ? t('edit', language) : t('createNew', language)} {t('vendor', language)}
-                </Text>
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{isEditing ? t('edit', language) : t('createNew', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('vendor', language)}</Text>
+                </View>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -179,9 +208,10 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { marginRight: 16, padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     scroll: { flex: 1 },
     scrollContent: { padding: 16, paddingBottom: 40 },
     section: { borderRadius: 16, padding: 16, marginBottom: 12 },

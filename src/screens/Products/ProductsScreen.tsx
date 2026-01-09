@@ -14,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
-import { Card, FAB, BarcodeScannerModal, ScreenHeader } from '../../components/common';
+import { Card, FAB, BarcodeScannerModal } from '../../components/common';
 
 import { Product } from '../../types';
 import { formatCurrency } from '../../utils/format';
@@ -40,6 +40,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const inputBg = isDark ? '#1e293b' : '#ffffff';
 
     const categories = ['All', ...Array.from(new Set(products.map(p => p.category).filter((c): c is string => !!c)))];
 
@@ -128,6 +129,19 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
         ]);
     };
 
+    const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
+        const Icon = icon;
+        return (
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+                <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
+            </View>
+        );
+    };
+
     const renderProduct = (item: Product) => {
         const isLowStock = item.track_stock && (item.stock_quantity || 0) <= (item.low_stock_threshold || 5);
         const outOfStock = item.track_stock && (item.stock_quantity || 0) <= 0;
@@ -138,7 +152,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('ProductForm', { productId: item.id })}
             >
-                <Card style={styles.productCard}>
+                <View style={[styles.productCard, { backgroundColor: cardBg }]}>
                     <View style={styles.productHeader}>
                         <View style={styles.productInfo}>
                             <View style={styles.nameRow}>
@@ -180,7 +194,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                             </View>
                         )}
                     </View>
-                </Card>
+                </View>
             </TouchableOpacity>
         );
     }
@@ -189,7 +203,7 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.titleLabel, { color: mutedColor }]}>{t('management', language).toUpperCase()}</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('products', language)}</Text>
                 </View>
                 <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('ProductForm')}>
@@ -203,40 +217,16 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                 {/* Inventory HUD */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <Box color="#818cf8" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: textColor }]}>{stats.totalProducts}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>{t('products', language)}</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <DollarSign color="#10b981" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: textColor }]}>{formatCurrency(stats.totalValue)}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>{t('total', language)} Vl.</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <AlertTriangle color="#f59e0b" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: '#f59e0b' }]}>{stats.lowStockItems}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>Pak Stok</Text>
-                            </View>
-                        </View>
-                        <View style={[styles.statCardPlain, { backgroundColor: cardBg }]}>
-                            <X color="#ef4444" size={20} />
-                            <View>
-                                <Text style={[styles.statValue, { color: '#ef4444' }]}>{stats.outOfStockItems}</Text>
-                                <Text style={[styles.statLabel, { color: mutedColor }]}>Pa Stok</Text>
-                            </View>
-                        </View>
+                        {renderStatCard(t('products', language), stats.totalProducts, Box, '#818cf8')}
+                        {renderStatCard('Vlera Totale', formatCurrency(stats.totalValue), DollarSign, '#10b981')}
+                        {renderStatCard('Pak Stok', stats.lowStockItems, AlertTriangle, '#f59e0b')}
+                        {renderStatCard('Pa Stok', stats.outOfStockItems, X, '#ef4444')}
                     </ScrollView>
                 </View>
 
                 {/* Filters & Search Header */}
-                <View style={{ backgroundColor: bgColor }}>
-                    <View style={[styles.searchBar, { backgroundColor: cardBg }]}>
+                <View>
+                    <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
                         <Search color={mutedColor} size={20} />
                         <TextInput
                             style={[styles.searchInput, { color: textColor }]}
@@ -278,12 +268,12 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                                     onPress={() => setSortBy(s)}
                                     style={[
                                         styles.sortBtn,
-                                        sortBy === s && { borderBottomColor: '#818cf8', borderBottomWidth: 2 }
+                                        sortBy === s && { borderBottomColor: primaryColor, borderBottomWidth: 2 }
                                     ]}
                                 >
                                     <Text style={[
                                         styles.sortBtnText,
-                                        { color: sortBy === s ? '#818cf8' : mutedColor }
+                                        { color: sortBy === s ? primaryColor : mutedColor }
                                     ]}>{s.toUpperCase()}</Text>
                                 </TouchableOpacity>
                             ))}
@@ -319,32 +309,48 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
-    titleLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 },
-    title: { fontSize: 30, fontWeight: 'bold' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 
-    scrollContent: { paddingBottom: 100, paddingHorizontal: 20 },
-    statsContainer: { paddingVertical: 8, marginBottom: 8 },
-    statsScroll: { gap: 12 },
-    statCardPlain: { padding: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 130 },
-    statValue: { fontSize: 16, fontWeight: 'bold' },
-    statLabel: { fontSize: 11, fontWeight: '600' },
+    scrollContent: { paddingBottom: 100 },
 
-    searchBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
+    // Stats
+    statsContainer: { marginBottom: 24 },
+    statsScroll: { paddingHorizontal: 20, gap: 12 },
+    statCard: {
+        minWidth: 140,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        gap: 8
+    },
+    statIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statValue: { fontSize: 18, fontWeight: 'bold' },
+    statLabel: { fontSize: 11, fontWeight: '500' },
+
+    // Search & Filter
+    searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
     searchInput: { flex: 1, fontSize: 16 },
 
-    filterScroll: { gap: 8, marginBottom: 16 },
+    filterScroll: { gap: 8, marginBottom: 16, paddingHorizontal: 20 },
     filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    filterText: { fontSize: 12, fontWeight: '600' },
+    filterText: { fontSize: 13, fontWeight: '600' },
 
-    sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-    tinyLabel: { fontSize: 10, fontWeight: 'bold' },
+    sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 20 },
+    tinyLabel: { fontSize: 11, fontWeight: '700', opacity: 0.7 },
     sortButtons: { flexDirection: 'row', gap: 16 },
     sortBtn: { paddingVertical: 4 },
-    sortBtnText: { fontSize: 10, fontWeight: 'bold' },
+    sortBtnText: { fontSize: 12, fontWeight: '700' },
 
-    productList: { paddingHorizontal: 0 },
-    productCard: { marginBottom: 12, padding: 16, borderRadius: 18 },
+    productList: { paddingHorizontal: 20, gap: 12 },
+    productCard: { padding: 16, borderRadius: 16 },
     productHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     productInfo: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
@@ -354,6 +360,7 @@ const styles = StyleSheet.create({
     productSku: { fontSize: 12, marginTop: 4 },
     stockRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
     stockText: { fontSize: 12, fontWeight: '600' },
+
     productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12 },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
     productPrice: { color: '#10b981', fontSize: 20, fontWeight: '800' },
@@ -361,6 +368,7 @@ const styles = StyleSheet.create({
     taxBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(129, 140, 248, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     taxText: { color: '#818cf8', fontSize: 10, fontWeight: '700' },
     deleteButton: { padding: 8 },
+
     emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, gap: 16 },
     emptyText: { fontSize: 14, fontWeight: '500' },
 });

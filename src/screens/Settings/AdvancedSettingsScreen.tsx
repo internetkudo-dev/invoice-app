@@ -9,7 +9,8 @@ import {
     ShieldCheck,
     ChevronRight,
     FileText,
-    Settings
+    Settings,
+    Layout
 } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -101,15 +102,7 @@ export function AdvancedSettingsScreen({ navigation }: any) {
         const isActive = activeSection === section;
         return (
             <TouchableOpacity
-                style={[
-                    styles.sectionHeader,
-                    {
-                        backgroundColor: cardBg,
-                        borderColor: isActive ? color : borderColor,
-                        borderLeftColor: color,
-                        borderLeftWidth: 4
-                    }
-                ]}
+                style={[styles.sectionHeader, { backgroundColor: cardBg }]}
                 onPress={() => setActiveSection(isActive ? null : section)}
             >
                 <View style={styles.sectionHeaderLeft}>
@@ -132,14 +125,12 @@ export function AdvancedSettingsScreen({ navigation }: any) {
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconButton, { backgroundColor: cardBg }]}>
-                        <ArrowLeft color={textColor} size={20} />
-                    </TouchableOpacity>
-                    <View style={{ marginLeft: 4 }}>
-                        <Text style={[styles.title, { color: textColor }]}>Advanced</Text>
-                        <Text style={[styles.subtitle, { color: mutedColor }]}>System & Integrations</Text>
-                    </View>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ArrowLeft color={textColor} size={24} />
+                </TouchableOpacity>
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('settings', language) || 'Settings'}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>Advanced</Text>
                 </View>
 
                 <View style={styles.statusIndicator}>
@@ -158,8 +149,67 @@ export function AdvancedSettingsScreen({ navigation }: any) {
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                {/* Document Layout */}
+                {renderHeader('Document Layout', Layout, 'appearance', primaryColor)}
+                {activeSection === 'appearance' && (
+                    <Card style={styles.sectionContent}>
+                        <Text style={[styles.label, { color: textColor }]}>Default Terms & Conditions</Text>
+                        <Input
+                            value={profile.terms_conditions}
+                            onChangeText={(t) => updateField('terms_conditions', t)}
+                            multiline
+                            numberOfLines={4}
+                            placeholder="Payment is due within 30 days..."
+                        />
+
+                        <View style={styles.divider} />
+                        <Text style={[styles.label, { color: textColor }]}>Default Paper Size</Text>
+                        <View style={styles.langGrid}>
+                            {['A4', 'A5', 'Receipt'].map(size => (
+                                <TouchableOpacity
+                                    key={size}
+                                    style={[
+                                        styles.langOption,
+                                        { backgroundColor: isDark ? '#334155' : '#f1f5f9', flex: 1, alignItems: 'center' },
+                                        profile.template_config?.pageSize === size && { backgroundColor: primaryColor }
+                                    ]}
+                                    onPress={() => updateField('template_config', {
+                                        ...(profile.template_config || { showLogo: true, showSignature: true, showBuyerSignature: true, showStamp: true, visibleColumns: { sku: true, unit: true, tax: true, quantity: true, price: true }, labels: {} }),
+                                        pageSize: size
+                                    })}
+                                >
+                                    <Text style={[styles.langText, { color: textColor }, profile.template_config?.pageSize === size && { color: '#fff' }]}>{size}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <View style={styles.divider} />
+                        <Button
+                            title="Invoice Design & Style"
+                            variant="shortcut"
+                            icon={Layout}
+                            onPress={() => navigation.navigate('TemplateEditor')}
+                            style={{ marginTop: 8 }}
+                        />
+                        <Button
+                            title="Contract Templates"
+                            variant="shortcut"
+                            icon={FileText}
+                            onPress={() => navigation.navigate('ContractTemplates')}
+                            style={{ marginTop: 8 }}
+                        />
+                        <Button
+                            title="Invoice Fields & Defaults"
+                            variant="shortcut"
+                            icon={Settings}
+                            onPress={() => navigation.navigate('InvoiceTemplateSettings')}
+                            style={{ marginTop: 8 }}
+                        />
+                    </Card>
+                )}
+
                 {/* Stripe/PayPal Integration */}
-                {renderHeader('Payment Integrations', CreditCard, 'integrations', '#6366f1')}
+                {renderHeader('Payment Integrations', CreditCard, 'integrations', primaryColor)}
                 {activeSection === 'integrations' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.subLabel, { color: mutedColor }]}>Native Integrations</Text>
@@ -176,7 +226,7 @@ export function AdvancedSettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Email & SMTP */}
-                {renderHeader('Email Server (SMTP)', Mail, 'smtp', '#10b981')}
+                {renderHeader('Email Server (SMTP)', Mail, 'smtp', primaryColor)}
                 {activeSection === 'smtp' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor, marginBottom: 16 }]}>
@@ -234,7 +284,7 @@ export function AdvancedSettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Backup & Data */}
-                {renderHeader('Backup & Restore', Download, 'backup', '#f59e0b')}
+                {renderHeader('Backup & Restore', Download, 'backup', primaryColor)}
                 {activeSection === 'backup' && (
                     <Card style={styles.sectionContent}>
                         <Text style={[styles.hint, { color: mutedColor, marginBottom: 12 }]}>
@@ -247,14 +297,14 @@ export function AdvancedSettingsScreen({ navigation }: any) {
                 )}
 
                 {/* Account Settings */}
-                {renderHeader('Account & Security', User, 'account', '#ef4444')}
+                {renderHeader('Account & Security', User, 'account', primaryColor)}
                 {activeSection === 'account' && (
                     <Card style={styles.sectionContent}>
                         <Button
                             title="Manage Profile & Security"
                             variant="shortcut"
                             icon={User}
-                            onPress={() => navigation.navigate('Profile')}
+                            onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })}
                         />
                         <View style={{ height: 12 }} />
                         <Button
@@ -272,32 +322,14 @@ export function AdvancedSettingsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 60,
-        paddingBottom: 20
-    },
-    iconButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2
-    },
-    title: { fontSize: 22, fontWeight: 'bold', letterSpacing: -0.5 },
-    subtitle: { fontSize: 13, fontWeight: '500', marginTop: -2 },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     statusIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center'
+        position: 'absolute',
+        top: 60,
+        right: 20,
     },
     savingBadge: {
         flexDirection: 'row',
@@ -322,19 +354,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 16,
-        borderRadius: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2
+        borderRadius: 14,
+        marginBottom: 10,
     },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
     sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     sectionTitle: { fontSize: 16, fontWeight: '700' },
-    sectionContent: { padding: 20, borderRadius: 20, marginTop: -8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
+    sectionContent: { padding: 20, borderRadius: 20, marginTop: -6, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
     subLabel: { fontSize: 12, fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
     hint: { fontSize: 13, lineHeight: 20 },
     inputLabel: { fontSize: 14, fontWeight: '600' },
@@ -346,5 +372,10 @@ const styles = StyleSheet.create({
         padding: 10,
         borderRadius: 12
     },
-    switchText: { fontSize: 12, fontWeight: '600', marginLeft: 8 }
+    switchText: { fontSize: 12, fontWeight: '600', marginLeft: 8 },
+    label: { fontSize: 14, fontWeight: 'bold', marginBottom: 12 },
+    divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginVertical: 16 },
+    langGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+    langOption: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+    langText: { fontSize: 13, fontWeight: '600' },
 });

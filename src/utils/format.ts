@@ -7,5 +7,6 @@ export const formatDecimal = (num: number): string => {
 
 export const formatCurrency = (num: number, currency = 'EUR'): string => {
     const formatted = formatDecimal(num);
-    return `${formatted} ${currency}`;
+    const symbol = currency === 'EUR' ? '€' : currency;
+    return `${formatted} ${symbol}`;
 };

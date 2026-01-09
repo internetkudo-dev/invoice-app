@@ -140,7 +140,10 @@ export function ScanBillScreen({ navigation }: any) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{t('scanBill', language)}</Text>
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('aiAnalysis', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('scanBill', language)}</Text>
+                </View>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
@@ -240,9 +243,10 @@ export function ScanBillScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 },
-    backButton: { marginRight: 16, padding: 4 },
-    title: { fontSize: 22, fontWeight: 'bold' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     content: { flexGrow: 1, padding: 20 },
     emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 40 },
     iconPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },

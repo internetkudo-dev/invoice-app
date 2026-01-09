@@ -12,7 +12,9 @@ import {
     TrendingUp,
     DollarSign,
     User,
-    Briefcase
+    Briefcase,
+    LayoutGrid,
+    Settings
 } from 'lucide-react-native';
 import { t } from '../../i18n';
 import { supabase } from '../../api/supabase';
@@ -97,13 +99,13 @@ export function ManagementScreen({ navigation }: any) {
     const renderStatCard = (title: string, value: string | number, icon: any, color: string) => {
         const Icon = icon;
         return (
-            <Card style={[styles.statCard, { backgroundColor: cardBg }]}>
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
                 <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
                     <Icon color={color} size={20} />
                 </View>
                 <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
                 <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
-            </Card>
+            </View>
         );
     };
 
@@ -118,30 +120,24 @@ export function ManagementScreen({ navigation }: any) {
         const Icon = icon;
         return (
             <TouchableOpacity
-                activeOpacity={0.85}
+                activeOpacity={0.8}
                 onPress={onPress}
-                style={styles.cardWrapper}
             >
-                <Card style={[styles.card, { backgroundColor: cardBg, borderColor: isDark ? '#334155' : '#e2e8f0' }]}>
-                    <View style={styles.cardContent}>
-                        <View style={[styles.leftAccent, { backgroundColor: color }]} />
-                        <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
-                            <Icon color={color} size={24} />
-                        </View>
-                        <View style={styles.cardInfo}>
-                            <Text style={[styles.cardTitle, { color: textColor }]}>{title}</Text>
-                            <Text style={[styles.cardDescription, { color: mutedColor }]}>{description}</Text>
-                        </View>
-                        <View style={styles.cardRight}>
-                            {count !== undefined && (
-                                <View style={[styles.badge, { backgroundColor: `${color}20` }]}>
-                                    <Text style={[styles.badgeText, { color }]}>{count}</Text>
-                                </View>
-                            )}
-                            <ChevronRight color={mutedColor} size={18} />
-                        </View>
+                <View style={[styles.actionCard, { backgroundColor: cardBg }]}>
+                    <View style={[styles.actionIcon, { backgroundColor: `${color}15` }]}>
+                        <Icon color={color} size={22} />
                     </View>
-                </Card>
+                    <View style={styles.actionInfo}>
+                        <Text style={[styles.actionTitle, { color: textColor }]}>{title}</Text>
+                        <Text style={[styles.actionSubtitle, { color: mutedColor }]}>{description}</Text>
+                    </View>
+                    {count !== undefined && (
+                        <View style={[styles.badge, { backgroundColor: 'rgba(99, 102, 241, 0.1)' }]}>
+                            <Text style={[styles.badgeText, { color: '#6366f1' }]}>{count}</Text>
+                        </View>
+                    )}
+                    <ChevronRight color={mutedColor} size={18} />
+                </View>
             </TouchableOpacity>
         );
     };
@@ -151,22 +147,20 @@ export function ManagementScreen({ navigation }: any) {
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.headerSubtitle, { color: mutedColor }]}>Menaxhimi</Text>
-                    <Text style={[styles.title, { color: textColor }]}>{t('management', language)}</Text>
+                    <Text style={[styles.headerSubtitle, { color: mutedColor }]}>{t('management', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>Overview</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={[styles.profileButton, { backgroundColor: cardBg, marginRight: 8 }]}>
-                        <Briefcase color={primaryColor} size={20} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={[styles.profileButton, { backgroundColor: cardBg }]}>
-                        <User color={primaryColor} size={20} />
+                    <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })} style={[styles.iconButton, { backgroundColor: cardBg }]}>
+                        <Settings color={isDark ? '#fff' : '#1e293b'} size={24} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedColor} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />}
+                showsVerticalScrollIndicator={false}
             >
                 {/* Stats Dashboard */}
                 <View style={styles.statsContainer}>
@@ -180,11 +174,11 @@ export function ManagementScreen({ navigation }: any) {
                 </View>
 
                 {/* Management Cards */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Menaxho</Text>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>Modules</Text>
                 <View style={styles.section}>
                     {renderCard(
                         t('clients', language),
-                        'Menaxho bazën e klientëve',
+                        'Manage your client base',
                         Users,
                         '#6366f1',
                         () => navigation.navigate('ClientsList'),
@@ -192,7 +186,7 @@ export function ManagementScreen({ navigation }: any) {
                     )}
                     {renderCard(
                         t('products', language),
-                        'Inventari dhe katalogu i shërbimeve',
+                        'Inventory and service catalog',
                         Package,
                         '#8b5cf6',
                         () => navigation.navigate('ProductsList'),
@@ -200,7 +194,7 @@ export function ManagementScreen({ navigation }: any) {
                     )}
                     {renderCard(
                         t('vendors', language),
-                        'Furnizuesit dhe partnerët',
+                        'Suppliers and partners',
                         Building2,
                         '#ec4899',
                         () => navigation.navigate('VendorsList'),
@@ -216,16 +210,19 @@ export function ManagementScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    profileButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     headerSubtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
     title: { fontSize: 28, fontWeight: '800' },
+
     scrollContent: { paddingBottom: 16 },
-    statsContainer: { marginBottom: 20 },
-    statsScroll: { paddingHorizontal: 16, gap: 12 },
+
+    // Stats
+    statsContainer: { marginBottom: 24 },
+    statsScroll: { paddingHorizontal: 20, gap: 12 },
     statCard: {
-        width: 130,
+        minWidth: 140,
         padding: 16,
         borderRadius: 16,
         alignItems: 'center',
@@ -239,47 +236,42 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     statValue: { fontSize: 18, fontWeight: 'bold' },
-    statLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+    statLabel: { fontSize: 11, fontWeight: '500' },
+
+    // Section
     sectionTitle: {
         fontSize: 16,
         fontWeight: '700',
         marginBottom: 12,
-        paddingHorizontal: 16
+        paddingHorizontal: 20
     },
-    section: { gap: 12, paddingHorizontal: 16 },
-    cardWrapper: { marginBottom: 0 },
-    card: {
-        flexDirection: 'row',
-        borderRadius: 16,
-        padding: 0,
-        overflow: 'hidden',
-        borderWidth: 1,
-    },
-    cardContent: {
-        flex: 1,
+    section: { gap: 12, paddingHorizontal: 20 },
+
+    // Action Cards
+    actionCard: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        gap: 16,
+        borderRadius: 14,
+        gap: 14
     },
-    leftAccent: {
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: 4,
-    },
-    iconContainer: {
+    actionIcon: {
         width: 48,
         height: 48,
         borderRadius: 12,
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'center'
     },
-    cardInfo: { flex: 1, gap: 4 },
-    cardTitle: { fontSize: 16, fontWeight: '600' },
-    cardDescription: { fontSize: 13 },
-    cardRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-    badgeText: { fontSize: 13, fontWeight: '700' },
+    actionInfo: { flex: 1 },
+    actionTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    actionSubtitle: { fontSize: 13 },
+    badge: {
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 6
+    },
+    badgeText: { fontSize: 12, fontWeight: 'bold' },
 });

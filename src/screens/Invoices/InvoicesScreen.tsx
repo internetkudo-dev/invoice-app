@@ -87,7 +87,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 .select(`*, client:clients(name)`)
                 .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
                 .eq('type', selectedType)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(5);
 
             console.log('Invoices fetched:', invData?.length, 'error:', error);
             if (error) console.error('Error fetching invoices:', error);
@@ -98,7 +99,8 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 .from('contracts')
                 .select(`*, client:clients(name)`)
                 .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(5);
 
             if (error) console.error('Error fetching contracts:', error);
             else console.log('Contracts fetched:', contractData?.length);
@@ -153,7 +155,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                     activeOpacity={0.7}
                     onPress={() => navigation.navigate('ContractDetail', { contractId: item.id })}
                 >
-                    <Card style={styles.invoiceCard}>
+                    <View style={[styles.invoiceCard, { backgroundColor: cardBg }]}>
                         <View style={styles.invoiceHeader}>
                             <View style={styles.invoiceInfo}>
                                 <Text style={[styles.invoiceNumber, { color: textColor }]}>{item.title}</Text>
@@ -165,9 +167,9 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         </View>
                         <View style={styles.invoiceFooter}>
                             <Text style={[styles.invoiceDate, { color: mutedColor }]}>{new Date(item.created_at).toLocaleDateString()}</Text>
-                            <Text style={[styles.invoiceAmount, { fontSize: 14 }]}>{item.type.replace('_', ' ').toUpperCase()}</Text>
+                            <Text style={[styles.invoiceAmount, { fontSize: 14, color: textColor }]}>{item.type.replace('_', ' ').toUpperCase()}</Text>
                         </View>
-                    </Card>
+                    </View>
                 </TouchableOpacity>
             );
         }
@@ -177,7 +179,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: item.id })}
             >
-                <Card style={styles.invoiceCard}>
+                <View style={[styles.invoiceCard, { backgroundColor: cardBg }]}>
                     <View style={styles.invoiceHeader}>
                         <View style={styles.invoiceInfo}>
                             <Text style={[styles.invoiceNumber, { color: textColor }]}>{item.invoice_number}</Text>
@@ -199,7 +201,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         <Text style={[styles.invoiceDate, { color: mutedColor }]}>{item.issue_date}</Text>
                         <Text style={[styles.invoiceAmount, { color: primaryColor }]}>{formatCurrency(Number(item.total_amount), profile?.currency)}</Text>
                     </View>
-                </Card>
+                </View>
             </TouchableOpacity>
         );
     };
@@ -208,23 +210,18 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.titleLabel, { color: mutedColor }]}>OVERVIEW</Text>
-                    <Text style={[styles.title, { color: textColor }]}>
-                        {selectedType === 'invoice' ? t('invoices', language) : selectedType === 'offer' ? t('offers', language) : 'Contracts'}
-                    </Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>Overview</Text>
+                    <Text style={[styles.title, { color: textColor }]}>Recent Activity</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg, borderColor: borderColor }]} onPress={() => setShowSearch(!showSearch)}>
-                        <Search color={primaryColor} size={20} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg, borderColor: borderColor }]} onPress={() => navigation.navigate('QRScanner')}>
+                    <TouchableOpacity style={[styles.iconButton, { backgroundColor: cardBg }]} onPress={() => navigation.navigate('QRScanner')}>
                         <QrCode color={primaryColor} size={20} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             {/* Type Selector */}
-            <View style={styles.typeSelector}>
+            <View style={[styles.typeSelector, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
                 {(['invoice', 'offer', 'contract'] as const).map((tValue) => (
                     <TouchableOpacity
                         key={tValue}
@@ -241,56 +238,11 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                 ))}
             </View>
 
-            {/* Search Bar */}
-            {showSearch && (
-                <View style={[styles.searchBar, { backgroundColor: inputBg }]}>
-                    <Search color={mutedColor} size={20} />
-                    <TextInput
-                        style={[styles.searchInput, { color: textColor }]}
-                        placeholder={t('search', language)}
-                        placeholderTextColor={mutedColor}
-                        value={searchQuery}
-                        onChangeText={handleSearch}
-                        autoFocus
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => handleSearch('')}>
-                            <X color={mutedColor} size={20} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            )}
-
-            {/* Status Filter */}
-            <View style={styles.filterWrapper}>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filterContent}
-                >
-                    {statuses.map((status) => (
-                        <TouchableOpacity
-                            key={status.key}
-                            style={[
-                                styles.filterButton,
-                                { backgroundColor: cardBg, borderColor: borderColor },
-                                selectedStatus === status.key && { backgroundColor: primaryColor, borderColor: primaryColor },
-                            ]}
-                            onPress={() => handleStatusFilter(status.key)}
-                        >
-                            <Text
-                                style={[
-                                    styles.filterText,
-                                    { color: mutedColor },
-                                    selectedStatus === status.key && styles.filterTextActive,
-                                ]}
-                            >
-                                {status.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+            {/* View All Button */}
+            <View style={{ paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>Aktiviteti i fundit</Text>
             </View>
+
 
             <FlatList
                 data={filteredInvoices}
@@ -305,6 +257,16 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         </Text>
                     </View>
                 }
+                ListFooterComponent={
+                    invoices.length > 0 ? (
+                        <TouchableOpacity
+                            style={{ padding: 16, alignItems: 'center', marginTop: 8, marginBottom: 24, backgroundColor: cardBg, borderRadius: 12 }}
+                            onPress={() => navigation.navigate('AllInvoices', { type: selectedType })}
+                        >
+                            <Text style={{ color: primaryColor, fontWeight: '700', fontSize: 15 }}>{t('viewAll', language)}</Text>
+                        </TouchableOpacity>
+                    ) : null
+                }
             />
 
             <FAB
@@ -317,9 +279,9 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                     { label: t('newInvoice', language), icon: FileText, color: primaryColor, onPress: () => navigation.navigate('InvoiceForm', { type: 'invoice' }) },
                     { label: t('newOffer', language), icon: FileText, color: '#ec4899', onPress: () => navigation.navigate('InvoiceForm', { type: 'offer' }) },
                     { label: 'Shto të ardhura', icon: DollarSign, color: '#10b981', onPress: () => navigation.navigate('PaymentsList') },
-                    { label: 'Shto shpenzim', icon: Wallet, color: '#ef4444', onPress: () => navigation.getParent()?.navigate('ExpensesTab', { screen: 'ExpenseForm' }) },
-                    { label: t('newClient', language), icon: Users, color: '#0ea5e9', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'clients', openForm: true } }) },
-                    { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ManagementTabs', params: { activeTab: 'products', openForm: true } }) },
+                    { label: 'Shto shpenzim', icon: Wallet, color: '#ef4444', onPress: () => navigation.navigate('ExpenseForm') },
+                    { label: t('newClient', language), icon: Users, color: '#0ea5e9', onPress: () => navigation.navigate('Management', { screen: 'ClientForm' }) },
+                    { label: t('newProduct', language), icon: Package, color: '#f59e0b', onPress: () => navigation.navigate('Management', { screen: 'ProductForm' }) },
                 ]}
             />
         </View>
@@ -328,24 +290,28 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
-    titleLabel: { fontSize: 13, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 },
-    title: { fontSize: 30, fontWeight: 'bold' },
-    typeSelector: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, borderRadius: 16, padding: 4, backgroundColor: 'rgba(0,0,0,0.03)', gap: 4 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
+
+    typeSelector: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, borderRadius: 16, padding: 4, gap: 4 },
     typeOption: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12 },
     typeText: { fontSize: 13, fontWeight: '700' },
+
     headerActions: { flexDirection: 'row', gap: 12 },
-    iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+
     searchBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, marginBottom: 16, gap: 12 },
     searchInput: { flex: 1, fontSize: 16 },
+
     filterWrapper: { marginBottom: 16 },
     filterContent: { paddingHorizontal: 20, gap: 10, flexDirection: 'row' },
-    filterButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
-    filterButtonActive: {},
+    filterButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
     filterText: { fontWeight: '600', fontSize: 13 },
     filterTextActive: { color: '#fff' },
-    listContent: { padding: 20, paddingBottom: 100 },
-    invoiceCard: { marginBottom: 12, padding: 16, borderRadius: 18 },
+
+    listContent: { padding: 20, paddingTop: 0, paddingBottom: 100 },
+    invoiceCard: { marginBottom: 12, padding: 16, borderRadius: 16 },
     invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     invoiceInfo: { flex: 1 },
     invoiceNumber: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
@@ -355,6 +321,7 @@ const styles = StyleSheet.create({
     invoiceFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 12, marginTop: 4 },
     invoiceDate: { fontSize: 13, fontWeight: '500' },
     invoiceAmount: { fontSize: 18, fontWeight: '800' },
+
     emptyContainer: { alignItems: 'center', marginTop: 48 },
     emptyText: { textAlign: 'center' },
 });

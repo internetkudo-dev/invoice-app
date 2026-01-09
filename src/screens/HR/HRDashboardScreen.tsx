@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Card, Button } from '../../components/common';
 import {
     Users, UserPlus, UserCheck, ClipboardList, Copy, RefreshCw,
-    ChevronRight, Shield, FileText, Clock, Calendar, CalendarCheck, DollarSign, Wallet, ShieldCheck, User, Briefcase
+    ChevronRight, Shield, FileText, Clock, Calendar, CalendarCheck, DollarSign, Wallet, ShieldCheck, User, Briefcase, Settings
 } from 'lucide-react-native';
 import { supabase } from '../../api/supabase';
 import * as Clipboard from 'expo-clipboard';
@@ -177,12 +177,11 @@ export function HRDashboardScreen({ navigation }: any) {
                     <Text style={[styles.title, { color: textColor }]}>HR Dashboard</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={[styles.profileButton, { backgroundColor: cardBg, marginRight: 8 }]}>
-                        <Briefcase color={isDark ? '#fff' : '#1e293b'} size={20} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={[styles.profileButton, { backgroundColor: cardBg }]}>
-                        <User color={isDark ? '#fff' : '#1e293b'} size={20} />
-                    </TouchableOpacity>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })} style={[styles.iconButton, { backgroundColor: cardBg }]}>
+                            <Settings color={isDark ? '#fff' : '#1e293b'} size={24} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -327,7 +326,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    profileButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+    iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
     title: { fontSize: 28, fontWeight: '800' },
     scroll: { flex: 1 },

@@ -134,12 +134,15 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             {/* Header */}
+            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
-                    <ArrowLeft color={textColor} size={20} />
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { color: textColor }]}>{getTitle()}</Text>
-                <View style={{ width: 44 }} />
+                <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{type === 'income' ? t('finances', language) : t('management', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{getTitle()}</Text>
+                </View>
             </View>
 
             {/* Stats Summary */}
@@ -185,22 +188,10 @@ export function ExpensesListScreen({ navigation, route }: ExpensesListScreenProp
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 60,
-        paddingBottom: 16,
-    },
-    backButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    title: { fontSize: 20, fontWeight: 'bold' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, gap: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
 
     summaryCard: {
         paddingHorizontal: 16,

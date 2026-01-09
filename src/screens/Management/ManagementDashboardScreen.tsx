@@ -36,21 +36,22 @@ interface ActionItem {
     icon: any;
     color: string;
     action: string;
+    description?: string; // Added description
     params?: any;
 }
 
 // Products section items
 const productActions: ActionItem[] = [
-    { key: 'productsDashboard', labelKey: 'productsDashboard', icon: LayoutDashboard, color: '#6366f1', action: 'dashboard' },
-    { key: 'addProduct', labelKey: 'addProduct', icon: Plus, color: '#10b981', action: 'add' },
-    { key: 'inventory', labelKey: 'inventory', icon: Archive, color: '#f59e0b', action: 'inventory' },
+    { key: 'productsDashboard', labelKey: 'productsDashboard', icon: LayoutDashboard, color: '#6366f1', action: 'dashboard', description: 'View and manage inventory' },
+    { key: 'addProduct', labelKey: 'addProduct', icon: Plus, color: '#10b981', action: 'add', description: 'Add new item to stock' },
+    { key: 'inventory', labelKey: 'inventory', icon: Archive, color: '#f59e0b', action: 'inventory', description: 'Check low stock items' },
 ];
 
 // Clients section items
 const clientActions: ActionItem[] = [
-    { key: 'clientsDashboard', labelKey: 'clientsDashboard', icon: LayoutDashboard, color: '#8b5cf6', action: 'dashboard' },
-    { key: 'addCustomer', labelKey: 'addCustomer', icon: UserPlus, color: '#10b981', action: 'add' },
-    { key: 'customerCard', labelKey: 'customerCard', icon: CreditCard, color: '#ec4899', action: 'card' },
+    { key: 'clientsDashboard', labelKey: 'clientsDashboard', icon: LayoutDashboard, color: '#8b5cf6', action: 'dashboard', description: 'View client database' },
+    { key: 'addCustomer', labelKey: 'addCustomer', icon: UserPlus, color: '#10b981', action: 'add', description: 'Register new client' },
+    { key: 'customerCard', labelKey: 'customerCard', icon: CreditCard, color: '#ec4899', action: 'card', description: 'View client details' },
 ];
 
 export function ManagementDashboardScreen({ navigation }: any) {
@@ -158,22 +159,21 @@ export function ManagementDashboardScreen({ navigation }: any) {
                 activeOpacity={0.8}
                 onPress={onPress}
             >
-                <Card style={[styles.actionCard, { borderLeftColor: item.color, borderLeftWidth: 4 }]}>
-                    <View style={styles.actionCardContent}>
-                        <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-                            <Icon color={item.color} size={24} />
-                        </View>
-                        <View style={styles.actionCardInfo}>
-                            <Text style={[styles.actionCardTitle, { color: textColor }]}>{label}</Text>
-                            {count !== undefined && (
-                                <Text style={[styles.actionCardCount, { color: mutedColor }]}>
-                                    {count} {count === 1 ? 'item' : 'items'}
-                                </Text>
-                            )}
-                        </View>
-                        <ChevronRight color={mutedColor} size={20} />
+                <View style={[styles.actionCard, { backgroundColor: cardBg }]}>
+                    <View style={[styles.actionIcon, { backgroundColor: `${item.color}15` }]}>
+                        <Icon color={item.color} size={22} />
                     </View>
-                </Card>
+                    <View style={styles.actionInfo}>
+                        <Text style={[styles.actionTitle, { color: textColor }]}>{label}</Text>
+                        <Text style={[styles.actionSubtitle, { color: mutedColor }]}>{item.description || 'Manage item'}</Text>
+                    </View>
+                    {count !== undefined && count > 0 && (
+                        <View style={[styles.badge, { backgroundColor: '#ef4444' }]}>
+                            <Text style={styles.badgeText}>{count}</Text>
+                        </View>
+                    )}
+                    <ChevronRight color={mutedColor} size={18} />
+                </View>
             </TouchableOpacity>
         );
     };
@@ -183,37 +183,9 @@ export function ManagementDashboardScreen({ navigation }: any) {
             {/* Header */}
             <View style={styles.header}>
                 <View>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>Administration</Text>
                     <Text style={[styles.title, { color: textColor }]}>{t('management', language)}</Text>
                 </View>
-                <View style={[styles.headerIcon, { backgroundColor: `${primaryColor}15` }]}>
-                    <Briefcase color={primaryColor} size={24} />
-                </View>
-            </View>
-
-            {/* Stats Summary */}
-            <View style={styles.statsRow}>
-                <Card style={[styles.statCard, { flex: 1 }]}>
-                    <View style={styles.statContent}>
-                        <View style={[styles.statIconContainer, { backgroundColor: '#6366f115' }]}>
-                            <Package color="#6366f1" size={20} />
-                        </View>
-                        <View>
-                            <Text style={[styles.statValue, { color: textColor }]}>{stats.productCount}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>{t('products', language)}</Text>
-                        </View>
-                    </View>
-                </Card>
-                <Card style={[styles.statCard, { flex: 1 }]}>
-                    <View style={styles.statContent}>
-                        <View style={[styles.statIconContainer, { backgroundColor: '#8b5cf615' }]}>
-                            <Users color="#8b5cf6" size={20} />
-                        </View>
-                        <View>
-                            <Text style={[styles.statValue, { color: textColor }]}>{stats.clientCount}</Text>
-                            <Text style={[styles.statLabel, { color: mutedColor }]}>{t('clients', language)}</Text>
-                        </View>
-                    </View>
-                </Card>
             </View>
 
             <ScrollView
@@ -222,16 +194,30 @@ export function ManagementDashboardScreen({ navigation }: any) {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={primaryColor} />}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Products Section */}
-                <View style={styles.sectionHeader}>
-                    <View style={styles.sectionTitleRow}>
-                        <Package color="#6366f1" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('products', language)}</Text>
+                {/* Stats Row - Vertical Style */}
+                <View style={styles.statsRow}>
+                    <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                        <View style={[styles.statIcon, { backgroundColor: '#6366f115' }]}>
+                            <Package color="#6366f1" size={20} />
+                        </View>
+                        <Text style={[styles.statValue, { color: textColor }]}>{stats.productCount}</Text>
+                        <Text style={[styles.statLabel, { color: mutedColor }]}>{t('products', language)}</Text>
                     </View>
-                    <Text style={[styles.sectionSubtitle, { color: mutedColor }]}>
-                        {stats.productCount} {t('products', language).toLowerCase()}
-                    </Text>
+
+                    <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                        <View style={[styles.statIcon, { backgroundColor: '#8b5cf615' }]}>
+                            <Users color="#8b5cf6" size={20} />
+                        </View>
+                        <Text style={[styles.statValue, { color: textColor }]}>{stats.clientCount}</Text>
+                        <Text style={[styles.statLabel, { color: mutedColor }]}>{t('clients', language)}</Text>
+                    </View>
                 </View>
+
+                {/* Products Section */}
+                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 12, marginBottom: 12 }]}>
+                    {t('products', language)}
+                </Text>
+
                 <View style={styles.grid}>
                     {productActions.map((action, index) =>
                         renderActionCard(
@@ -243,15 +229,10 @@ export function ManagementDashboardScreen({ navigation }: any) {
                 </View>
 
                 {/* Clients Section */}
-                <View style={styles.sectionHeader}>
-                    <View style={styles.sectionTitleRow}>
-                        <Users color="#8b5cf6" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('clients', language)}</Text>
-                    </View>
-                    <Text style={[styles.sectionSubtitle, { color: mutedColor }]}>
-                        {stats.clientCount} {t('clients', language).toLowerCase()}
-                    </Text>
-                </View>
+                <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24, marginBottom: 12 }]}>
+                    {t('clients', language)}
+                </Text>
+
                 <View style={styles.grid}>
                     {clientActions.map((action, index) =>
                         renderActionCard(
@@ -276,102 +257,71 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingTop: 60,
-        paddingBottom: 16
+        paddingBottom: 10,
     },
-    title: { fontSize: 28, fontWeight: 'bold' },
-    headerIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-
-    // Stats row
-    statsRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 16,
-        gap: 12,
-        marginBottom: 8,
-    },
-    statCard: {
-        padding: 16,
-    },
-    statContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    statIconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    statLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-    },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
 
     scroll: { flex: 1 },
     scrollContent: { padding: 16 },
 
-    // Section headers
-    sectionHeader: {
-        marginTop: 8,
-        marginBottom: 12,
-        paddingHorizontal: 4
-    },
-    sectionTitleRow: {
+    // Stats row
+    statsRow: {
         flexDirection: 'row',
+        gap: 12,
+        marginBottom: 20,
+    },
+    statCard: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 16,
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 4,
+        gap: 8
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700'
+    statIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    sectionSubtitle: {
-        fontSize: 13,
-        marginLeft: 28,
-    },
+    statValue: { fontSize: 24, fontWeight: 'bold' },
+    statLabel: { fontSize: 12 },
+
+    // Section headers
+    sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
 
     // Grid
     grid: {
-        gap: 12,
+        gap: 10,
         marginBottom: 16,
     },
 
     // Action card styles
     actionCard: {
-        padding: 16,
-        borderRadius: 16,
-    },
-    actionCardContent: {
         flexDirection: 'row',
         alignItems: 'center',
+        padding: 16,
+        borderRadius: 14,
+        gap: 14
     },
-    iconContainer: {
+    actionIcon: {
         width: 48,
         height: 48,
         borderRadius: 12,
         alignItems: 'center',
+        justifyContent: 'center'
+    },
+    actionInfo: { flex: 1 },
+    actionTitle: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    actionSubtitle: { fontSize: 13 },
+    badge: {
+        minWidth: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
+        paddingHorizontal: 6
     },
-    actionCardInfo: { flex: 1 },
-    actionCardTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 2
-    },
-    actionCardCount: {
-        fontSize: 13
-    },
+    badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 });

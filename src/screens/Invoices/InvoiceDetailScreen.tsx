@@ -10,14 +10,17 @@ import {
     ActivityIndicator,
     StyleSheet,
     Linking,
+    Modal,
 } from 'react-native';
-import { ArrowLeft, Edit, Share2, FileText, Check, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard } from 'lucide-react-native';
+import { ArrowLeft, Edit, Share2, FileText, Check, Trash2, Eye, RefreshCw, Mail, Zap, CreditCard, Download, Printer, X } from 'lucide-react-native';
+import { WebView } from 'react-native-webview';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 import { Card, Button, StatusBadge, TemplatePreview } from '../../components/common';
 import { Invoice, InvoiceItem, TemplateType, InvoiceData, Profile } from '../../types';
 import { generatePdf, sharePdf, printPdf } from '../../services/pdf/pdfService';
+import { generateInvoiceHtml } from '../../services/pdf/TemplateFactory';
 import { formatCurrency } from '../../utils/format';
 import { t } from '../../i18n';
 
@@ -26,7 +29,7 @@ interface InvoiceDetailScreenProps {
     route: any;
 }
 
-const formats: string[] = ['A4', 'A5', 'Receipt'];
+
 
 export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenProps) {
     const { user } = useAuth();
@@ -37,15 +40,17 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     const [invoice, setInvoice] = useState<Invoice | null>(null);
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [selectedFormat, setSelectedFormat] = useState<string>('A4');
     const [generating, setGenerating] = useState(false);
     const [sending, setSending] = useState(false);
     const [pdfUri, setPdfUri] = useState<string | null>(null);
+    const [showPreview, setShowPreview] = useState(false);
+    const [htmlContent, setHtmlContent] = useState('');
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
+    const borderColor = isDark ? '#334155' : '#e2e8f0';
     const primaryColor = profile?.primary_color || '#818cf8';
 
     useFocusEffect(
@@ -59,7 +64,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         let { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
 
-        // Fix: Fetch company details if active_company_id is set
         if (profileData?.active_company_id) {
             const { data: companyData } = await supabase
                 .from('companies')
@@ -68,7 +72,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 .single();
 
             if (companyData) {
-                // Merge company data over profile data (company settings take precedence)
                 profileData = { ...profileData, ...companyData };
             }
         }
@@ -83,7 +86,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
 
         if (invoiceData) {
             setInvoice(invoiceData);
-            setSelectedFormat(invoiceData.paper_size || 'A4');
         }
 
         const { data: itemsData } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
@@ -173,18 +175,15 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) { Alert.alert('Error', 'Unable to generate PDF'); return; }
 
-        await supabase.from('invoices').update({ paper_size: selectedFormat }).eq('id', invoiceId);
-
         setGenerating(true);
-        // Map format to template
         let templateToUse: TemplateType = 'hidroterm';
-
         const result = await generatePdf(data, templateToUse);
         setGenerating(false);
 
-        if (result.success) {
-            setPdfUri(result.uri);
-            Alert.alert('Success', 'PDF generated successfully!');
+        if (result.success && result.uri) {
+            // "Save to phone files" implies opening the share sheet or saving directly.
+            // sharingAsync is the most reliable way to allow both on iOS/Android without complex perm setup for direct download folder access.
+            await sharePdf(result.uri);
         } else {
             Alert.alert('Error', result.error || 'Failed to generate PDF');
         }
@@ -208,13 +207,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             const data = buildInvoiceData();
             if (!data) return;
 
-            // 1. Generate PDF
             let templateToUse: TemplateType = 'hidroterm';
-
             const pdfResult = await generatePdf(data, templateToUse);
             if (!pdfResult.success || !pdfResult.uri) throw new Error('Failed to generate PDF');
 
-            // 2. Open Native Mail Composer
             const status = await MailComposer.composeAsync({
                 recipients: [clientEmail],
                 subject: `Invoice ${invoice?.invoice_number} from ${profile?.company_name}`,
@@ -226,7 +222,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             if (status.status === 'sent') {
                 Alert.alert('Success', 'Email marked as sent');
             }
-
         } catch (error: any) {
             Alert.alert('Error', 'Failed to compose email: ' + error.message);
         } finally {
@@ -239,7 +234,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (!data) return;
 
         let templateToUse: TemplateType = 'hidroterm';
-
         setGenerating(true);
         const result = await generatePdf(data, templateToUse);
         setGenerating(false);
@@ -257,7 +251,6 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (!data) return;
 
         let templateToUse: TemplateType = 'hidroterm';
-
         setGenerating(true);
         const result = await printPdf(data, templateToUse);
         setGenerating(false);
@@ -265,6 +258,15 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (!result.success && !result.canceled) {
             Alert.alert('Error', result.error || 'Failed to show preview');
         }
+    };
+
+    const handlePreview = () => {
+        const data = buildInvoiceData();
+        if (!data) return;
+
+        const html = generateInvoiceHtml(data, 'hidroterm');
+        setHtmlContent(html);
+        setShowPreview(true);
     };
 
     const handleUpdateStatus = async (status: string) => {
@@ -283,9 +285,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 {
                     text: 'Convert',
                     onPress: async () => {
-                        const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user?.id).single();
                         const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('user_id', user?.id).eq('type', 'invoice');
-
                         const nextNumber = (count || 0) + 1;
                         const today = new Date();
                         const dd = String(today.getDate()).padStart(2, '0');
@@ -351,115 +351,105 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: cardBg }]}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
                         <ArrowLeft color={textColor} size={24} />
                     </TouchableOpacity>
-                    <View>
-                        <Text style={[styles.title, { color: textColor }]}>{invoice.invoice_number}</Text>
-                        <Text style={[styles.subtitle, { color: mutedColor }]}>{(invoice as any).client?.name || 'No client'}</Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={[styles.subtitle, { color: mutedColor }]} numberOfLines={1}>{(invoice as any).client?.name || 'No client'}</Text>
+                        <Text style={[styles.title, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>{invoice.invoice_number}</Text>
                     </View>
                 </View>
                 <View style={styles.headerRight}>
                     {invoice.type === 'offer' && (
                         <TouchableOpacity
-                            style={[styles.transformButton, { backgroundColor: primaryColor }]}
+                            style={[styles.smallActionBtn, { backgroundColor: primaryColor, marginRight: 8 }]}
                             onPress={handleTransformToInvoice}
                         >
-                            <RefreshCw color="#fff" size={16} />
-                            <Text style={styles.transformText}>CONVERT</Text>
+                            <RefreshCw color="#fff" size={20} />
                         </TouchableOpacity>
                     )}
                     {profile?.role !== 'worker' && (
                         <>
                             <TouchableOpacity
-                                style={[styles.actionBtn, { backgroundColor: '#fee2e2', marginRight: 8 }]}
+                                style={[styles.smallActionBtn, { backgroundColor: '#fee2e2', marginRight: 8 }]}
                                 onPress={handleDelete}
                             >
-                                <Trash2 color="#ef4444" size={18} />
+                                <Trash2 color="#ef4444" size={20} />
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.editButton, { backgroundColor: `${primaryColor}20` }]}
+                                style={[styles.smallActionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
                                 onPress={() => navigation.navigate('InvoiceForm', { invoiceId: invoice.id })}
                             >
-                                <Edit color={primaryColor} size={18} />
+                                <Edit color={textColor} size={20} />
                             </TouchableOpacity>
                         </>
                     )}
                 </View>
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Status Card */}
-                <Card style={styles.statusCard}>
-                    <View style={styles.statusCardHeader}>
+                <Card style={styles.mainCard}>
+                    <View style={styles.mainCardHeader}>
+                        <View>
+                            <Text style={[styles.amountLabel, { color: mutedColor }]}>Total Amount</Text>
+                            <Text style={[styles.totalAmount, { color: primaryColor }]}>{formatCurrency(Number(invoice.total_amount), profile?.currency)}</Text>
+                        </View>
                         <StatusBadge status={invoice.status} />
-                        <Text style={[styles.totalAmount, { color: '#818cf8' }]}>{formatCurrency(Number(invoice.total_amount), profile?.currency)}</Text>
                     </View>
-                    <View style={styles.statusCardDates}>
-                        <View style={styles.dateBox}>
-                            <Text style={[styles.dateLabel, { color: mutedColor }]}>Issue Date</Text>
+
+                    <View style={[styles.divider, { backgroundColor: borderColor }]} />
+
+                    <View style={styles.datesRow}>
+                        <View>
+                            <Text style={[styles.dateLabel, { color: mutedColor }]}>Issued</Text>
                             <Text style={[styles.dateValue, { color: textColor }]}>{invoice.issue_date}</Text>
                         </View>
-                        <View style={styles.dateBox}>
-                            <Text style={[styles.dateLabel, { color: mutedColor }]}>Due Date</Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.dateLabel, { color: mutedColor }]}>Due</Text>
                             <Text style={[styles.dateValue, { color: textColor }]}>{invoice.due_date || 'On Receipt'}</Text>
                         </View>
                     </View>
                 </Card>
 
-                {/* Quick Status Update */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>Update Status</Text>
-                <View style={styles.statusRow}>
+                {/* Status Selector */}
+                <Text style={[styles.sectionTitle, { color: textColor }]}>Status Update</Text>
+                <View style={styles.statusScroll}>
                     {['draft', 'sent', 'paid', 'overdue'].map((status) => (
                         <TouchableOpacity
                             key={status}
-                            style={[styles.statusChip, { backgroundColor: cardBg }, invoice.status === status && styles.statusChipActive]}
+                            style={[
+                                styles.statusChip,
+                                { backgroundColor: cardBg, borderColor },
+                                invoice.status === status && { backgroundColor: primaryColor, borderColor: primaryColor }
+                            ]}
                             onPress={() => handleUpdateStatus(status)}
                         >
-                            {invoice.status === status && <Check color="#fff" size={14} />}
-                            <Text style={[styles.statusChipText, { color: mutedColor }, invoice.status === status && styles.statusChipTextActive]}>
+                            <Text style={[styles.statusChipText, { color: invoice.status === status ? '#fff' : mutedColor }]}>
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </Text>
                         </TouchableOpacity>
                     ))}
                 </View>
 
-                {/* Format Selection */}
-                <Text style={[styles.sectionTitle, { color: textColor }]}>{t('paperSize', language) || 'Choose Format'}</Text>
-                <View style={styles.statusRow}>
-                    {formats.map((format) => (
-                        <TouchableOpacity
-                            key={format}
-                            style={[
-                                styles.statusChip,
-                                { backgroundColor: cardBg, flex: 1, justifyContent: 'center' },
-                                selectedFormat === format && { backgroundColor: primaryColor, borderColor: primaryColor }
-                            ]}
-                            onPress={() => setSelectedFormat(format)}
-                        >
-                            <Text style={[styles.statusChipText, { color: mutedColor }, selectedFormat === format && { color: '#fff' }]}>
-                                {format}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
 
-                {/* Line Items */}
+
+                {/* Items */}
                 <Text style={[styles.sectionTitle, { color: textColor }]}>Items ({items.length})</Text>
-                <Card style={styles.card}>
+                <Card style={styles.itemsCard}>
                     {items.map((item, index) => (
-                        <View key={item.id} style={[styles.itemRow, index < items.length - 1 && styles.itemRowBorder]}>
+                        <View key={item.id} style={[styles.itemRow, index < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: borderColor }]}>
                             <View style={styles.itemInfo}>
                                 <Text style={[styles.itemName, { color: textColor }]}>{item.description}</Text>
                                 <Text style={[styles.itemMeta, { color: mutedColor }]}>
-                                    {item.quantity} × {formatCurrency(Number(item.unit_price), profile?.currency)}
+                                    {item.quantity} x {formatCurrency(Number(item.unit_price), profile?.currency)}
                                 </Text>
                             </View>
-                            <Text style={styles.itemAmount}>{formatCurrency(Number(item.amount), profile?.currency)}</Text>
+                            <Text style={[styles.itemTotal, { color: textColor }]}>{formatCurrency(Number(item.amount), profile?.currency)}</Text>
                         </View>
                     ))}
 
-                    <View style={styles.summarySection}>
+                    <View style={[styles.summarySection, { borderTopColor: borderColor }]}>
                         <View style={styles.summaryRow}>
                             <Text style={[styles.summaryLabel, { color: mutedColor }]}>Subtotal</Text>
                             <Text style={[styles.summaryValue, { color: textColor }]}>
@@ -478,116 +468,110 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                                 <Text style={[styles.summaryValue, { color: '#10b981' }]}>-{formatCurrency(Number(invoice.discount_amount), profile?.currency)}</Text>
                             </View>
                         )}
-                        <View style={[styles.summaryRow, { marginTop: 4 }]}>
-                            <Text style={[styles.summaryLabel, { color: mutedColor }]}>Payment</Text>
-                            <Text style={[styles.summaryValue, { color: textColor, textTransform: 'capitalize' }]}>{invoice.payment_method || 'Bank'}</Text>
+                        <View style={[styles.summaryRow, { marginTop: 8 }]}>
+                            <Text style={[styles.totalLabel, { color: textColor }]}>Total</Text>
+                            <Text style={[styles.totalValue, { color: primaryColor }]}>{formatCurrency(Number(invoice.total_amount), profile?.currency)}</Text>
                         </View>
-                        {invoice.payment_method === 'cash' && (
-                            <>
-                                <View style={styles.summaryRow}>
-                                    <Text style={[styles.summaryLabel, { color: mutedColor }]}>Received</Text>
-                                    <Text style={[styles.summaryValue, { color: textColor }]}>{formatCurrency(Number(invoice.amount_received), profile?.currency)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                    <Text style={[styles.summaryLabel, { color: mutedColor }]}>Change</Text>
-                                    <Text style={[styles.summaryValue, { color: primaryColor }]}>{formatCurrency(Number(invoice.change_amount), profile?.currency)}</Text>
-                                </View>
-                            </>
-                        )}
                     </View>
                 </Card>
 
-                {/* Signatures Preview */}
-                {
-                    (profile?.signature_url || invoice.buyer_signature_url) && (
-                        <Card style={styles.card}>
-                            <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 16 }]}>Signatures</Text>
-                            <View style={styles.row}>
-                                {profile?.signature_url && (
-                                    <View style={styles.half}>
-                                        <Text style={[styles.dateLabel, { color: mutedColor }]}>Seller</Text>
-                                        <View style={styles.signatureSmallBox}>
-                                            <Eye color={mutedColor} size={20} />
-                                        </View>
-                                    </View>
-                                )}
-                                {invoice.buyer_signature_url && (
-                                    <View style={styles.half}>
-                                        <Text style={[styles.dateLabel, { color: mutedColor }]}>Buyer</Text>
-                                        <View style={styles.signatureSmallBox}>
-                                            <Eye color={mutedColor} size={20} />
-                                        </View>
-                                    </View>
-                                )}
-                            </View>
-                        </Card>
-                    )
-                }
-
-                {/* Action Buttons */}
-                <View style={styles.actions}>
+                {/* Actions */}
+                <View style={styles.actionsContainer}>
                     <Button
-                        title={generating ? 'Building Preview...' : 'On-Screen Preview'}
-                        onPress={handlePrint}
+                        title={generating ? 'Building Preview...' : 'Preview Document'}
+                        onPress={handlePreview}
                         icon={Eye}
                         loading={generating}
+                        style={{ marginBottom: 12 }}
                     />
 
-                    <Button
-                        title={sending ? 'Sending Email...' : 'Email Client'}
-                        onPress={handleSendEmail}
-                        icon={Mail}
-                        loading={sending}
-                        variant="primary" // Or different color
-                        style={{ marginTop: 12, backgroundColor: '#f59e0b' }}
-                    />
-
-                    <View style={styles.secondaryActions}>
+                    <View style={styles.actionGrid}>
                         <Button
-                            title="Share PDF"
+                            title="Share"
                             onPress={handleShare}
                             icon={Share2}
-                            variant="outline"
+                            variant="secondary"
                             style={{ flex: 1 }}
                         />
                         <Button
-                            title="Export"
-                            onPress={handleGeneratePdf}
-                            icon={FileText}
-                            variant="outline"
+                            title="Email"
+                            onPress={handleSendEmail}
+                            icon={Mail}
+                            variant="secondary"
                             style={{ flex: 1 }}
+                            loading={sending}
                         />
                     </View>
 
-                    {/* Online Payment Actions */}
-                    {(profile?.payment_link_stripe || profile?.payment_link_paypal) && (
-                        <View style={{ marginTop: 24 }}>
-                            <Text style={[styles.tinyLabel, { color: mutedColor, marginBottom: 12 }]}>Online Payment</Text>
-                            <View style={styles.row}>
-                                {profile?.payment_link_stripe && (
-                                    <Button
-                                        title="Stripe"
-                                        onPress={() => profile.payment_link_stripe && Linking.openURL(profile.payment_link_stripe)}
-                                        icon={Zap}
-                                        style={{ flex: 1, backgroundColor: '#635bff', borderColor: '#635bff' }}
-                                        textStyle={{ color: '#fff' }}
-                                    />
-                                )}
-                                {profile?.payment_link_paypal && (
-                                    <Button
-                                        title="PayPal"
-                                        onPress={() => profile.payment_link_paypal && Linking.openURL(profile.payment_link_paypal)}
-                                        icon={CreditCard}
-                                        style={{ flex: 1, backgroundColor: '#0070ba', borderColor: '#0070ba' }}
-                                        textStyle={{ color: '#fff' }}
-                                    />
-                                )}
-                            </View>
-                        </View>
-                    )}
+                    <View style={[styles.actionGrid, { marginTop: 12 }]}>
+                        <Button
+                            title="Print"
+                            onPress={handlePrint}
+                            icon={Printer}
+                            variant="primary" // Changed to primary for visibility/differentiation logic or kept utility
+                            style={{ flex: 1, backgroundColor: isDark ? '#334155' : '#e2e8f0' }}
+                            textStyle={{ color: textColor }}
+                        />
+                        <Button
+                            title="Download PDF"
+                            onPress={handleGeneratePdf}
+                            icon={Download}
+                            variant="primary"
+                            style={{ flex: 1, backgroundColor: isDark ? '#334155' : '#e2e8f0' }}
+                            textStyle={{ color: textColor }}
+                        />
+                    </View>
                 </View>
-            </ScrollView >
-        </View >
+
+                {/* Online Payment Actions */}
+                {(profile?.payment_link_stripe || profile?.payment_link_paypal) && (
+                    <View style={{ marginTop: 24 }}>
+                        <Text style={[styles.dateLabel, { color: mutedColor, marginBottom: 12, textTransform: 'uppercase' }]}>Online Payment Links</Text>
+                        <View style={styles.actionGrid}>
+                            {profile?.payment_link_stripe && (
+                                <Button
+                                    title="Stripe Link"
+                                    onPress={() => profile.payment_link_stripe && Linking.openURL(profile.payment_link_stripe)}
+                                    icon={Zap}
+                                    style={{ flex: 1, backgroundColor: '#635bff', borderColor: '#635bff' }}
+                                    textStyle={{ color: '#fff' }}
+                                />
+                            )}
+                            {profile?.payment_link_paypal && (
+                                <Button
+                                    title="PayPal Link"
+                                    onPress={() => profile.payment_link_paypal && Linking.openURL(profile.payment_link_paypal)}
+                                    icon={CreditCard}
+                                    style={{ flex: 1, backgroundColor: '#0070ba', borderColor: '#0070ba' }}
+                                    textStyle={{ color: '#fff' }}
+                                />
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                <View style={{ height: 40 }} />
+            </ScrollView>
+
+            <Modal visible={showPreview} animationType="slide">
+                <View style={{ flex: 1, backgroundColor: bgColor }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 16 }}>
+                        <TouchableOpacity onPress={() => setShowPreview(false)}>
+                            <X color={textColor} size={24} />
+                        </TouchableOpacity>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: textColor }}>Invoice Preview</Text>
+                        <TouchableOpacity onPress={handlePrint}>
+                            <Printer color={primaryColor} size={24} />
+                        </TouchableOpacity>
+                    </View>
+                    <WebView
+                        source={{ html: htmlContent }}
+                        style={{ flex: 1 }}
+                        originWhitelist={['*']}
+                    />
+                </View>
+            </Modal>
+        </View>
     );
 }
 
@@ -595,49 +579,60 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
-    headerLeft: { flexDirection: 'row', alignItems: 'center' },
-    backButton: { marginRight: 16, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
-    title: { fontSize: 24, fontWeight: 'bold' },
-    subtitle: { fontSize: 13, marginTop: 2 },
-    editButton: { padding: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    actionBtn: { padding: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     headerRight: { flexDirection: 'row', alignItems: 'center' },
+
+    title: { fontSize: 22, fontWeight: '800' },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+
+    smallActionBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
     scroll: { flex: 1 },
     scrollContent: { padding: 20, paddingBottom: 40 },
-    statusCard: { marginBottom: 20 },
-    statusCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    totalAmount: { fontSize: 28, fontWeight: 'bold' },
-    statusCardDates: { flexDirection: 'row', gap: 16 },
-    dateBox: { flex: 1 },
+
+    mainCard: { padding: 20, borderRadius: 20, marginBottom: 24 },
+    mainCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    amountLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
+    totalAmount: { fontSize: 32, fontWeight: '800' },
+
+    divider: { height: 1, marginVertical: 16 },
+    datesRow: { flexDirection: 'row', justifyContent: 'space-between' },
     dateLabel: { fontSize: 12, marginBottom: 4 },
     dateValue: { fontSize: 15, fontWeight: '600' },
-    sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, marginTop: 8 },
-    statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-    statusChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, gap: 6, borderWidth: 1, borderColor: '#334155' },
-    statusChipActive: { backgroundColor: '#6366f1', borderColor: '#6366f1' },
-    statusChipText: { fontWeight: '500', textTransform: 'capitalize' },
-    statusChipTextActive: { color: '#fff' },
-    templateScroll: { marginBottom: 20 },
-    templateScrollContent: { paddingRight: 16 },
-    card: { marginBottom: 20 },
-    itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
-    itemRowBorder: { borderBottomWidth: 1, borderBottomColor: '#334155' },
+
+    sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12, marginTop: 8 },
+
+    statusScroll: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+    statusChip: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    statusChipText: { fontSize: 13, fontWeight: '600' },
+
+    itemsCard: { padding: 0, borderRadius: 20, marginBottom: 24, overflow: 'hidden' },
+    itemRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 16 },
     itemInfo: { flex: 1 },
-    itemName: { fontSize: 15, marginBottom: 4 },
+    itemName: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
     itemMeta: { fontSize: 13 },
-    itemAmount: { color: '#818cf8', fontSize: 16, fontWeight: '600' },
-    summarySection: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 16, marginTop: 8 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+    itemTotal: { fontSize: 15, fontWeight: '700' },
+
+    summarySection: { padding: 16, backgroundColor: 'rgba(0,0,0,0.02)', borderTopWidth: 1 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
     summaryLabel: { fontSize: 14 },
     summaryValue: { fontSize: 14, fontWeight: '600' },
-    actions: { marginTop: 8 },
-    secondaryActions: { flexDirection: 'row', gap: 12, marginTop: 12 },
-    actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: '#334155' },
-    actionText: { fontSize: 15, fontWeight: '600' },
-    transformButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6, marginRight: 8 },
-    transformText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-    row: { flexDirection: 'row', gap: 16 },
-    half: { flex: 1 },
-    tinyLabel: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
-    signatureSmallBox: { height: 50, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+    totalLabel: { fontSize: 16, fontWeight: 'bold' },
+    totalValue: { fontSize: 18, fontWeight: '800' },
+
+    actionsContainer: { gap: 0 },
+    actionGrid: { flexDirection: 'row', gap: 12 },
 });

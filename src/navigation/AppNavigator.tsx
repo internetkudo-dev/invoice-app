@@ -104,6 +104,7 @@ function BiometricOverlay({ onAuthenticated }: { onAuthenticated: () => void }) 
 
 import { ContractDetailScreen } from '../screens/Contracts/ContractDetailScreen';
 import { FaturatScreen } from '../screens/Invoices/FaturatScreen';
+import { AllInvoicesScreen } from '../screens/Invoices/AllInvoicesScreen';
 import { PaymentFormScreen, PaymentsListScreen } from '../screens/Payments';
 import { CustomerLedgerScreen } from '../screens/Reports/CustomerLedgerScreen';
 import { VendorLedgerScreen } from '../screens/Reports/VendorLedgerScreen';
@@ -115,6 +116,7 @@ function InvoicesStack() {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="FaturatMain" component={FaturatScreen} />
             <Stack.Screen name="InvoicesList" component={InvoicesScreen} />
+            <Stack.Screen name="AllInvoices" component={AllInvoicesScreen} />
             <Stack.Screen name="InvoiceForm" component={InvoiceFormScreen} />
             <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
             <Stack.Screen name="ContractForm" component={ContractFormScreen} />
@@ -230,7 +232,7 @@ function HRStack() {
 }
 
 function MainTabs() {
-    const { isDark, language } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
 
     return (
         <Tab.Navigator
@@ -244,7 +246,7 @@ function MainTabs() {
                     height: Platform.OS === 'ios' ? 88 : 70,
                     paddingHorizontal: 8,
                 },
-                tabBarActiveTintColor: '#818cf8',
+                tabBarActiveTintColor: primaryColor,
                 tabBarInactiveTintColor: isDark ? '#64748b' : '#94a3b8',
                 tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 },
                 tabBarIconStyle: { marginTop: 4 },

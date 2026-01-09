@@ -10,7 +10,7 @@ import {
     TextInput,
     ScrollView,
 } from 'react-native';
-import { Trash2, Search, X, Plus, Filter, Calendar, DollarSign, Tag } from 'lucide-react-native';
+import { Trash2, Search, X, Plus, Filter, Calendar, DollarSign, Tag, TrendingUp, TrendingDown, Scale } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../api/supabase';
 import { useAuth } from '../../hooks/useAuth';
@@ -18,10 +18,11 @@ import { useTheme } from '../../hooks/useTheme';
 import { Card, FAB } from '../../components/common';
 import { Expense, ExpenseCategory } from '../../types';
 import { formatCurrency } from '../../utils/format';
+import { t } from '../../i18n';
 
 export function ExpensesScreen({ navigation }: any) {
     const { user } = useAuth();
-    const { isDark, primaryColor } = useTheme();
+    const { isDark, primaryColor, language } = useTheme();
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
     const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +37,7 @@ export function ExpensesScreen({ navigation }: any) {
     const textColor = isDark ? '#fff' : '#1e293b';
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
-    const borderColor = isDark ? '#334155' : '#e2e8f0';
+    const inputBg = isDark ? '#1e293b' : '#ffffff';
 
     useFocusEffect(
         useCallback(() => {
@@ -85,10 +86,10 @@ export function ExpensesScreen({ navigation }: any) {
     };
 
     const handleDelete = (id: string) => {
-        Alert.alert('Delete Expense', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert(t('delete', language), t('areYouSure', language), [
+            { text: t('cancel', language), style: 'cancel' },
             {
-                text: 'Delete',
+                text: t('delete', language),
                 style: 'destructive',
                 onPress: async () => {
                     await supabase.from('expenses').delete().eq('id', id);
@@ -98,15 +99,28 @@ export function ExpensesScreen({ navigation }: any) {
         ]);
     };
 
+    const renderStatCard = (title: string, value: string, icon: any, color: string) => {
+        const Icon = icon;
+        return (
+            <View style={[styles.statCard, { backgroundColor: cardBg }]}>
+                <View style={[styles.statIconContainer, { backgroundColor: `${color}15` }]}>
+                    <Icon color={color} size={20} />
+                </View>
+                <Text style={[styles.statValue, { color: textColor }]}>{value}</Text>
+                <Text style={[styles.statLabel, { color: mutedColor }]}>{title}</Text>
+            </View>
+        );
+    };
+
     const renderExpense = ({ item }: { item: Expense }) => (
         <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => navigation.navigate('ExpenseForm', { expenseId: item.id })}
         >
-            <Card style={[styles.expenseCard, { backgroundColor: cardBg, borderColor, borderWidth: 1, shadowColor: 'transparent' }]}>
+            <View style={[styles.expenseCard, { backgroundColor: cardBg }]}>
                 <View style={styles.expenseHeader}>
                     <View style={styles.expenseIconBox}>
-                        {(item.type === 'income') ? <DollarSign color='#10b981' size={20} /> : <Tag color={primaryColor} size={20} />}
+                        {(item.type === 'income') ? <TrendingUp color='#10b981' size={20} /> : <TrendingDown color='#ef4444' size={20} />}
                     </View>
                     <View style={styles.expenseTitle}>
                         <Text style={[styles.category, { color: textColor }]}>{item.category}</Text>
@@ -125,38 +139,35 @@ export function ExpensesScreen({ navigation }: any) {
                         <Trash2 color="#ef4444" size={16} />
                     </TouchableOpacity>
                 </View>
-            </Card>
+            </View>
         </TouchableOpacity>
     );
 
-    const totalFiltered = filteredExpenses.reduce((sum, e) => {
-        const amt = Number(e.amount);
-        return (e.type === 'income') ? sum + amt : sum - amt;
-    }, 0);
+    const totalIncome = filteredExpenses.filter(e => e.type === 'income').reduce((sum, e) => sum + Number(e.amount), 0);
+    const totalExpense = filteredExpenses.filter(e => e.type !== 'income').reduce((sum, e) => sum + Number(e.amount), 0);
+    const balance = totalIncome - totalExpense;
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
                 <View>
-                    <Text style={[styles.titleLabel, { color: primaryColor }]}>FINANCE</Text>
-                    <Text style={[styles.title, { color: textColor }]}>EXPENSES</Text>
+                    <Text style={[styles.subtitle, { color: mutedColor }]}>{t('finances', language)}</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('expenses', language)}</Text>
                 </View>
-                <View style={styles.headerRight}>
-                    <TouchableOpacity
-                        style={[styles.iconButton, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}
-                        onPress={() => setShowSearch(!showSearch)}
-                    >
-                        {showSearch ? <X color={textColor} size={20} /> : <Search color={textColor} size={20} />}
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                    style={[styles.iconButton, { backgroundColor: cardBg }]}
+                    onPress={() => setShowSearch(!showSearch)}
+                >
+                    {showSearch ? <X color={textColor} size={20} /> : <Search color={textColor} size={20} />}
+                </TouchableOpacity>
             </View>
 
             {showSearch && (
-                <View style={[styles.searchContainer, { backgroundColor: cardBg, borderColor, borderWidth: 1 }]}>
+                <View style={[styles.searchContainer, { backgroundColor: inputBg }]}>
                     <Search color={mutedColor} size={20} />
                     <TextInput
                         style={[styles.searchInput, { color: textColor }]}
-                        placeholder="Search expenses..."
+                        placeholder={t('search', language)}
                         placeholderTextColor={mutedColor}
                         value={searchQuery}
                         onChangeText={text => {
@@ -176,12 +187,11 @@ export function ExpensesScreen({ navigation }: any) {
             )}
 
             <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                    <Text style={[styles.statLabel, { color: mutedColor }]}>NET BALANCE</Text>
-                    <Text style={[styles.statValue, { color: totalFiltered >= 0 ? '#10b981' : '#ef4444' }]}>
-                        {formatCurrency(totalFiltered)}
-                    </Text>
-                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
+                    {renderStatCard(t('balance', language), formatCurrency(balance), Scale, balance >= 0 ? '#10b981' : '#ef4444')}
+                    {renderStatCard(t('totalIncomes', language), formatCurrency(totalIncome), TrendingUp, '#10b981')}
+                    {renderStatCard(t('totalExpenses', language), formatCurrency(totalExpense), TrendingDown, '#ef4444')}
+                </ScrollView>
             </View>
 
             <View style={styles.filterSection}>
@@ -191,8 +201,8 @@ export function ExpensesScreen({ navigation }: any) {
                             key={cat}
                             style={[
                                 styles.filterChip,
-                                { backgroundColor: cardBg, borderColor },
-                                selectedCategory === cat && { backgroundColor: primaryColor, borderColor: primaryColor }
+                                { backgroundColor: cardBg },
+                                selectedCategory === cat && { backgroundColor: primaryColor }
                             ]}
                             onPress={() => {
                                 setSelectedCategory(cat);
@@ -218,7 +228,7 @@ export function ExpensesScreen({ navigation }: any) {
                 ListEmptyComponent={
                     <View style={styles.emptyState}>
                         <DollarSign color={mutedColor} size={48} opacity={0.2} />
-                        <Text style={[styles.emptyText, { color: mutedColor }]}>No transactions found</Text>
+                        <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noItemsYet', language)}</Text>
                     </View>
                 }
             />
@@ -230,36 +240,51 @@ export function ExpensesScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
-    titleLabel: { fontSize: 13, fontWeight: 'bold', letterSpacing: 1.2, marginBottom: 2 },
-    title: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
-    headerRight: { flexDirection: 'row', gap: 12 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+    subtitle: { fontSize: 13, fontWeight: '500', marginBottom: 2 },
+    title: { fontSize: 28, fontWeight: '800' },
     iconButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 10, paddingHorizontal: 16, height: 50, borderRadius: 14, gap: 12 },
-    searchInput: { flex: 1, fontSize: 16, fontWeight: '500' },
-    statsContainer: { paddingHorizontal: 20, marginVertical: 16 },
-    statItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    statLabel: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
-    statValue: { fontSize: 24, fontWeight: '800' },
+
+    searchContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 0, paddingHorizontal: 16, height: 50, borderRadius: 14, gap: 12, marginBottom: 16 },
+    searchInput: { flex: 1, fontSize: 16 },
+
+    statsContainer: { marginBottom: 24 },
+    statsScroll: { paddingHorizontal: 20, gap: 12 },
+    statCard: {
+        minWidth: 140,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+        gap: 8
+    },
+    statIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statValue: { fontSize: 18, fontWeight: 'bold' },
+    statLabel: { fontSize: 11, fontWeight: '500' },
+
     filterSection: { marginBottom: 12 },
     filterContent: { paddingHorizontal: 20, gap: 8 },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, minWidth: 60, alignItems: 'center' },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, minWidth: 60, alignItems: 'center' },
     filterText: { fontSize: 13, fontWeight: '500' },
+
     listContent: { paddingHorizontal: 20, paddingBottom: 100, gap: 12 },
-    expenseCard: { padding: 16, borderRadius: 16, marginVertical: 0 },
+    expenseCard: { padding: 16, borderRadius: 16 },
     expenseHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    expenseIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(129, 140, 248, 0.1)', alignItems: 'center', justifyContent: 'center' },
+    expenseIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(148, 163, 184, 0.1)', alignItems: 'center', justifyContent: 'center' },
     expenseTitle: { flex: 1 },
     category: { fontSize: 16, fontWeight: '700' },
     description: { fontSize: 13, marginTop: 2 },
     amount: { fontSize: 17, fontWeight: '700' },
-    expenseFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(148, 163, 184, 0.1)' },
+    expenseFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
     dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     date: { fontSize: 12, fontWeight: '500' },
     deleteButton: { padding: 6, marginRight: -6 },
+
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 12 },
     emptyText: { fontSize: 15, fontWeight: '500' },
-    summaryCard: { marginHorizontal: 16, padding: 16, marginTop: 16, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, // Kept for ref if needed but not used in new layout
-    summaryLabel: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-    summaryAmount: { fontSize: 20, fontWeight: 'bold', color: '#1e293b' },
 });
