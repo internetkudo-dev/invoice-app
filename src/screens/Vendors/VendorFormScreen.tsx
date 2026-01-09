@@ -67,12 +67,12 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
 
     const handleSave = async () => {
         if (!formData.name) {
-            Alert.alert(t('error', language), 'Name is required');
+            Alert.alert(t('error', language), t('nameRequired', language));
             return;
         }
 
         if (!user) {
-            Alert.alert(t('error', language), 'You must be logged in');
+            Alert.alert(t('error', language), t('loginRequired', language));
             return;
         }
 
@@ -111,7 +111,7 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
             navigation.goBack();
         } catch (error: any) {
             console.error('Error saving vendor:', error);
-            Alert.alert(t('error', language), error.message || 'Failed to save vendor');
+            Alert.alert(t('error', language), error.message || t('saveError', language));
         } finally {
             setLoading(false);
         }
@@ -137,29 +137,29 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <Building2 color="#0891b2" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Contact Information</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('contactInfo', language)}</Text>
                     </View>
-                    <Input label="Name *" value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Vendor/Supplier name" />
-                    <Input label="Email" value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
-                    <Input label="Phone" value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
+                    <Input label={`${t('name', language) || 'Name'} *`} value={formData.name} onChangeText={(text) => setFormData({ ...formData, name: text })} placeholder="Vendor/Supplier name" />
+                    <Input label={t('email', language)} value={formData.email} onChangeText={(text) => setFormData({ ...formData, email: text })} placeholder="Email address" keyboardType="email-address" />
+                    <Input label={t('phone', language)} value={formData.phone} onChangeText={(text) => setFormData({ ...formData, phone: text })} placeholder="Phone number" keyboardType="phone-pad" />
                 </View>
 
                 {/* Address Details */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <MapPin color="#10b981" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Address Details</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('addressDetails', language)}</Text>
                     </View>
-                    <Input label="Street Address" value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
+                    <Input label={t('streetAddress', language)} value={formData.address} onChangeText={(text) => setFormData({ ...formData, address: text })} placeholder="Full address" multiline />
                     <View style={styles.row}>
                         <View style={styles.halfField}>
-                            <Input label="City" value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder="City" />
+                            <Input label={t('city', language)} value={formData.city} onChangeText={(text) => setFormData({ ...formData, city: text })} placeholder="City" />
                         </View>
                         <View style={styles.halfField}>
-                            <Input label="Zip Code" value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder="Zip" keyboardType="number-pad" />
+                            <Input label={t('zipCode', language)} value={formData.zip_code} onChangeText={(text) => setFormData({ ...formData, zip_code: text })} placeholder="Zip" keyboardType="number-pad" />
                         </View>
                     </View>
-                    <Input label="Country" value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder="Country" />
+                    <Input label={t('country', language)} value={formData.country} onChangeText={(text) => setFormData({ ...formData, country: text })} placeholder="Country" />
                 </View>
 
                 {/* Business Info */}
@@ -167,26 +167,26 @@ export function VendorFormScreen({ navigation, route }: VendorFormScreenProps) {
                     <View style={styles.sectionHeader}>
                         <Globe color="#10b981" size={20} />
                         <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={[styles.sectionTitle, { color: textColor }]}>Business Details</Text>
+                            <Text style={[styles.sectionTitle, { color: textColor }]}>{t('businessDetails', language)}</Text>
                             <TouchableOpacity
                                 style={{ backgroundColor: '#10b98120', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
                                 onPress={() => WebBrowser.openBrowserAsync('https://apps.atk-ks.org/BizPasiveApp/VatRegist/Index')}
                             >
-                                <Text style={{ color: '#10b981', fontSize: 12, fontWeight: 'bold' }}>Check Registry ↗</Text>
+                                <Text style={{ color: '#10b981', fontSize: 12, fontWeight: 'bold' }}>{t('checkRegistry', language)} ↗</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                    <Input label="Tax ID / VAT Number" value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
+                    <Input label={t('taxIdVat', language)} value={formData.tax_id} onChangeText={(text) => setFormData({ ...formData, tax_id: text })} placeholder="Tax identification number" />
                 </View>
 
                 {/* Notes */}
                 <View style={[styles.section, { backgroundColor: cardBg }]}>
                     <View style={styles.sectionHeader}>
                         <FileText color="#f59e0b" size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Notes</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('notes', language)}</Text>
                     </View>
                     <Input
-                        label="Notes"
+                        label={t('notes', language)}
                         value={formData.notes}
                         onChangeText={(text) => setFormData({ ...formData, notes: text })}
                         placeholder="Additional notes about this vendor..."

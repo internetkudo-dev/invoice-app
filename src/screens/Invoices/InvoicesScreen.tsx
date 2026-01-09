@@ -84,7 +84,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
             console.log('Fetching invoices for type:', selectedType, 'user:', user.id, 'companyId:', companyId);
             const { data: invData, error } = await supabase
                 .from('invoices')
-                .select(`*, client:clients(name)`)
+                .select(`*, client:clients(name), items:invoice_items(id)`)
                 .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
                 .eq('type', selectedType)
                 .order('created_at', { ascending: false })
@@ -198,7 +198,12 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
                         </View>
                     </View>
                     <View style={styles.invoiceFooter}>
-                        <Text style={[styles.invoiceDate, { color: mutedColor }]}>{item.issue_date}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={[styles.invoiceDate, { color: mutedColor }]}>{item.issue_date}</Text>
+                            <Text style={[styles.invoiceDate, { color: mutedColor }]}>
+                                • {item.items?.length || 0} {t('items', language).toLowerCase()}
+                            </Text>
+                        </View>
                         <Text style={[styles.invoiceAmount, { color: primaryColor }]}>{formatCurrency(Number(item.total_amount), profile?.currency)}</Text>
                     </View>
                 </View>

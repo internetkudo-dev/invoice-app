@@ -263,8 +263,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 status,
                 type,
                 subtype,
-                items_count: items.length,
-                subtotal: totals.subtotal,
                 tax_amount: totals.tax,
                 discount_amount: totals.discount,
                 discount_percent: parseFloat(discount) || 0,

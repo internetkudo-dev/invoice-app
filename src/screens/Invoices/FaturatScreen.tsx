@@ -222,7 +222,7 @@ export function FaturatScreen({ navigation }: any) {
                 // Fetch Recent Activity
                 const { data: recentInvoices } = await supabase
                     .from('invoices')
-                    .select('id, invoice_number, status, total_amount, client:clients(name), type, subtype, created_at')
+                    .select('id, invoice_number, status, total_amount, client:clients(name), items:invoice_items(id), type, subtype, created_at')
                     .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
                     .order('created_at', { ascending: false })
                     .limit(10);
@@ -428,7 +428,7 @@ export function FaturatScreen({ navigation }: any) {
             {/* Recent Activity */}
             {recentActivity.length > 0 && (
                 <>
-                    <Text style={[styles.sectionTitle, { color: textColor }]}>Aktiviteti i Fundit</Text>
+                    <Text style={[styles.sectionTitle, { color: textColor }]}>{t('recentActivity', language)}</Text>
                     <Card style={styles.recentCard}>
                         {recentActivity.map((activity, index) => (
                             <TouchableOpacity
@@ -449,11 +449,18 @@ export function FaturatScreen({ navigation }: any) {
                             >
                                 <View style={styles.invoiceInfo}>
                                     <Text style={[styles.invoiceNumber, { color: textColor }]}>
-                                        {activity.activityType === 'document' ? (activity.invoice_number || 'Draft') : 'Payment'}
+                                        {activity.activityType === 'document' ? (activity.invoice_number || t('draft', language)) : t('payment', language)}
                                     </Text>
-                                    <Text style={[styles.clientName, { color: mutedColor }]}>
-                                        {activity.client?.name || 'Klient i panjohur'}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <Text style={[styles.clientName, { color: mutedColor }]}>
+                                            {activity.client?.name || t('unknownClient', language)}
+                                        </Text>
+                                        {activity.activityType === 'document' && (
+                                            <Text style={[styles.clientName, { color: mutedColor, fontSize: 11 }]}>
+                                                • {activity.items?.length || 0} {t('items', language).toLowerCase()}
+                                            </Text>
+                                        )}
+                                    </View>
                                 </View>
                                 <View style={styles.invoiceRight}>
                                     <Text style={[styles.invoiceAmount, { color: textColor }]}>

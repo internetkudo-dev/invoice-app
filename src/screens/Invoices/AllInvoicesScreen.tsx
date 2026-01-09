@@ -79,7 +79,7 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
         let data = [];
         let query = supabase
             .from(selectedType === 'contract' ? 'contracts' : 'invoices')
-            .select(`*, client:clients(name)`)
+            .select(selectedType === 'contract' ? `*, client:clients(name)` : `*, client:clients(name), items:invoice_items(id)`)
             .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
             .order('created_at', { ascending: sortOrder === 'asc' });
 
@@ -163,9 +163,16 @@ export function AllInvoicesScreen({ navigation, route }: AllInvoicesScreenProps)
                         </View>
                     </View>
                     <View style={styles.invoiceFooter}>
-                        <Text style={[styles.invoiceDate, { color: mutedColor }]}>
-                            {isContract ? new Date(item.created_at).toLocaleDateString() : item.issue_date}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={[styles.invoiceDate, { color: mutedColor }]}>
+                                {isContract ? new Date(item.created_at).toLocaleDateString() : item.issue_date}
+                            </Text>
+                            {!isContract && (
+                                <Text style={[styles.invoiceDate, { color: mutedColor }]}>
+                                    • {item.items?.length || 0} {t('items', language).toLowerCase()}
+                                </Text>
+                            )}
+                        </View>
                         <Text style={[styles.invoiceAmount, { color: primaryColor }]}>
                             {isContract ? item.type.replace('_', ' ').toUpperCase() : formatCurrency(Number(item.total_amount), profile?.currency)}
                         </Text>

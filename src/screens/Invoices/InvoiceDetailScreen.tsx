@@ -88,7 +88,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             setInvoice(invoiceData);
         }
 
-        const { data: itemsData } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
+        const { data: itemsData } = await supabase.from('invoice_items').select('*, product:products(sku, name)').eq('invoice_id', invoiceId);
         if (itemsData) setItems(itemsData);
     };
 

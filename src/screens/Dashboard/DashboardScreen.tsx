@@ -281,9 +281,9 @@ export function DashboardScreen({ navigation }: any) {
 
                 {/* Secondary Stats Row - for better overview */}
                 <View style={[styles.statsRow, { marginTop: 0 }]}>
-                    {renderStatCard('Total Revenue', formatCurrency(stats.totalRevenue), Wallet, primaryColor)}
-                    {renderStatCard('Paid', formatCurrency(stats.paid), Calendar, '#10b981')}
-                    {renderStatCard('Overdue', formatCurrency(stats.overdue), AlertTriangle, '#ef4444')}
+                    {renderStatCard(t('totalRevenue', language), formatCurrency(stats.totalRevenue), Wallet, primaryColor)}
+                    {renderStatCard(t('paid', language), formatCurrency(stats.paid), Calendar, '#10b981')}
+                    {renderStatCard(t('overdue', language), formatCurrency(stats.overdue), AlertTriangle, '#ef4444')}
                 </View>
 
                 {/* Stripe HUD */}
@@ -297,19 +297,19 @@ export function DashboardScreen({ navigation }: any) {
                                 <View style={styles.stripeHudHeader}>
                                     <View style={styles.stripeHudTitleRow}>
                                         <CreditCard color={primaryColor} size={18} />
-                                        <Text style={[styles.stripeHudTitle, { color: mutedColor }]}>Stripe Net Volume</Text>
+                                        <Text style={[styles.stripeHudTitle, { color: mutedColor }]}>{t('stripeNetVolume', language)}</Text>
                                     </View>
                                     <ChevronRight color={mutedColor} size={20} />
                                 </View>
                                 <Text style={[styles.stripeHudValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalNet)}</Text>
                                 <View style={[styles.stripeHudStats, { borderTopColor: borderColor }]}>
                                     <View style={styles.stripeHudStatItem}>
-                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>Payouts</Text>
+                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>{t('payouts', language)}</Text>
                                         <Text style={[styles.stripeHudStatValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalPayouts)}</Text>
                                     </View>
                                     <View style={[styles.stripeHudStatDivider, { backgroundColor: borderColor }]} />
                                     <View style={styles.stripeHudStatItem}>
-                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>Pending</Text>
+                                        <Text style={[styles.stripeHudStatLabel, { color: mutedColor }]}>{t('pending', language)}</Text>
                                         <Text style={[styles.stripeHudStatValue, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(stripeSummary.pendingPayouts)}</Text>
                                     </View>
                                 </View>
@@ -409,7 +409,12 @@ export function DashboardScreen({ navigation }: any) {
                         >
                             <View style={styles.invoiceInfo}>
                                 <Text style={[styles.invoiceNumber, { color: textColor }]}>{inv.invoice_number}</Text>
-                                <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || 'Quick Invoice'}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={[styles.clientName, { color: mutedColor }]}>{(inv as any).client?.name || 'Quick Invoice'}</Text>
+                                    <Text style={[styles.clientName, { color: mutedColor, fontSize: 11 }]}>
+                                        • {inv.items?.length || 0} {t('items', language).toLowerCase()}
+                                    </Text>
+                                </View>
                             </View>
                             <View style={styles.invoiceRight}>
                                 <Text style={[styles.invoiceAmount, { color: textColor }]}>{isPrivacyMode ? '****' : formatCurrency(inv.total_amount)}</Text>
@@ -449,7 +454,7 @@ export function DashboardScreen({ navigation }: any) {
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
                     <View style={styles.sectionTitleRow}>
                         <ShoppingCart color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>Online Sales</Text>
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('onlineSales', language)}</Text>
                     </View>
                 </View>
 
@@ -458,10 +463,10 @@ export function DashboardScreen({ navigation }: any) {
                     <Card style={[styles.alertCard, { backgroundColor: isDark ? '#451a03' : '#fff7ed' }]}>
                         <View style={styles.row}>
                             <AlertTriangle color="#f97316" size={20} />
-                            <Text style={[styles.alertTitle, { color: isDark ? '#fb923c' : '#9a3412' }]}>Stock Alert</Text>
+                            <Text style={[styles.alertTitle, { color: isDark ? '#fb923c' : '#9a3412' }]}>{t('stockAlert', language)}</Text>
                         </View>
                         {lowStockProducts.slice(0, 2).map((p, i) => (
-                            <Text key={i} style={[styles.alertText, { color: isDark ? '#fdba74' : '#c2410c' }]}>{p.name}: {p.stock_quantity} remaining</Text>
+                            <Text key={i} style={[styles.alertText, { color: isDark ? '#fdba74' : '#c2410c' }]}>{p.name}: {p.stock_quantity} {t('remaining', language)}</Text>
                         ))}
                     </Card>
                 )}

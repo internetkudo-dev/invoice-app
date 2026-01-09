@@ -71,7 +71,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
 
             if (error) {
                 console.error('Error fetching vendors:', error);
-                Alert.alert('Error', 'Failed to load vendors');
+                Alert.alert(t('error', language), t('loadError', language));
                 return;
             }
 
@@ -230,7 +230,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.subtitle, { color: mutedColor }]}>{t('management', language)}</Text>
-                    <Text style={[styles.title, { color: textColor }]}>Vendors</Text>
+                    <Text style={[styles.title, { color: textColor }]}>{t('vendors', language)}</Text>
                 </View>
                 <TouchableOpacity
                     style={[styles.addButton, { backgroundColor: cardBg }]}
@@ -248,9 +248,9 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 {/* Stats */}
                 <View style={styles.statsContainer}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-                        {renderStatCard('Vendors', stats.totalVendors, Building2, '#818cf8')}
-                        {renderStatCard('Shpenzime', formatCurrency(stats.totalExpenses), TrendingDown, '#ef4444')}
-                        {renderStatCard('Tatimore', stats.withTaxId, FileText, '#10b981')}
+                        {renderStatCard(t('vendors', language), stats.totalVendors, Building2, '#818cf8')}
+                        {renderStatCard(t('expenses', language), formatCurrency(stats.totalExpenses), TrendingDown, '#ef4444')}
+                        {renderStatCard(t('taxRegistered', language), stats.withTaxId, FileText, '#10b981')}
                     </ScrollView>
                 </View>
 
@@ -296,7 +296,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                     <View style={styles.emptyContainer}>
                         <Building2 color={mutedColor} size={48} opacity={0.2} />
                         <Text style={[styles.emptyText, { color: mutedColor }]}>
-                            {searchQuery ? 'No vendors found' : 'No vendors yet'}
+                            {searchQuery ? t('noVendorsFound', language) : t('noVendorsYet', language)}
                         </Text>
                     </View>
                 ) : (
