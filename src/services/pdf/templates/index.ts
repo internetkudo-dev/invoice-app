@@ -1,1 +1,1 @@
-export { hidrotermTemplate } from './hidroterm';
+export { corporateTemplate } from './corporate';

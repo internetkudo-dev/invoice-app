@@ -9,11 +9,11 @@ interface TemplatePreviewProps {
 }
 
 const templateStyles: Record<TemplateType, { primary: string; secondary: string; accent: string }> = {
-    hidroterm: { primary: '#000000', secondary: '#333333', accent: '#666666' },
+    corporate: { primary: '#000000', secondary: '#333333', accent: '#666666' },
 };
 
 const templateNames: Record<TemplateType, string> = {
-    hidroterm: 'HidroTherm',
+    corporate: 'Corporate',
 };
 
 export function TemplatePreview({ template, selected, isDark }: TemplatePreviewProps) {

@@ -81,26 +81,41 @@ export function EmployeeVaultScreen({ navigation, route }: any) {
         if (!uEmp) {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-                const { data: membership } = await supabase
-                    .from('memberships')
-                    .select('company_id, role')
-                    .eq('user_id', user.id)
-                    .in('role', ['owner', 'admin'])
+                // First try to get from profiles
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('company_id, active_company_id')
+                    .eq('id', user.id)
                     .single();
 
-                if (membership) {
-                    // Create a pseudo-employee object for logic compatibility
+                if (profile?.active_company_id || profile?.company_id) {
                     uEmp = {
-                        id: user.id, // Using user ID as placeholder for uploader ID logic
-                        company_id: membership.company_id,
-                        role: membership.role
+                        id: user.id,
+                        company_id: profile.active_company_id || profile.company_id,
+                        role: 'admin'
                     };
+                } else {
+                    // Try memberships as fallback
+                    const { data: membership } = await supabase
+                        .from('memberships')
+                        .select('company_id, role')
+                        .eq('user_id', user.id)
+                        .in('role', ['owner', 'admin'])
+                        .single();
+
+                    if (membership) {
+                        uEmp = {
+                            id: user.id,
+                            company_id: membership.company_id,
+                            role: membership.role
+                        };
+                    }
                 }
             }
         }
 
-        if (!uEmp) {
-            Alert.alert('Error', 'You do not have permission to upload documents (Profile not found).');
+        if (!uEmp || !uEmp.company_id) {
+            Alert.alert('Error', 'Unable to upload. Please make sure you are part of a company.');
             return;
         }
 
@@ -117,35 +132,42 @@ export function EmployeeVaultScreen({ navigation, route }: any) {
 
             // 1. Read file as base64
             const base64 = await FileSystem.readAsStringAsync(file.uri, {
-                encoding: FileSystem.EncodingType.Base64,
+                encoding: (FileSystem as any).EncodingType?.Base64 || 'base64',
             });
 
             // 2. Upload to Supabase Storage
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}.${fileExt}`;
-            const filePath = `${userEmployee.company_id}/${employeeId || userEmployee.id}/${fileName}`;
+            const targetEmployeeId = employeeId || uEmp.id;
+            const filePath = `${uEmp.company_id}/${targetEmployeeId}/${fileName}`;
 
             const { data: storageData, error: storageError } = await supabase.storage
                 .from('employee-documents')
                 .upload(filePath, decode(base64), {
-                    contentType: file.mimeType,
+                    contentType: file.mimeType || 'application/octet-stream',
                     upsert: true
                 });
 
-            if (storageError) throw storageError;
+            if (storageError) {
+                console.error('Storage error:', storageError);
+                throw new Error(storageError.message || 'Failed to upload file to storage');
+            }
 
             // 3. Save metadata to database
             const { error: dbError } = await supabase
                 .from('employee_documents')
                 .insert({
-                    employee_id: employeeId || userEmployee.id,
-                    company_id: userEmployee.company_id,
+                    employee_id: targetEmployeeId,
+                    company_id: uEmp.company_id,
                     name: file.name,
-                    document_type: 'contract', // Default for now
+                    document_type: 'other',
                     file_url: filePath
                 });
 
-            if (dbError) throw dbError;
+            if (dbError) {
+                console.error('Database error:', dbError);
+                throw new Error(dbError.message || 'Failed to save document metadata');
+            }
 
             Alert.alert('Success', 'Document uploaded successfully');
             fetchDocuments();

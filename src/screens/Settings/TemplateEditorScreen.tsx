@@ -32,15 +32,25 @@ const defaultConfig: TemplateConfig = {
     showSignature: true,
     showBuyerSignature: true,
     showStamp: true,
+    showQrCode: true,
+    showNotes: true,
+    showDiscount: true,
+    showTax: true,
+    showBankDetails: true,
     visibleColumns: {
+        rowNumber: true,
         sku: false,
-        unit: true,
-        tax: false,
+        description: true,
         quantity: true,
-        price: true,
+        unit: true,
+        unitPrice: true,
+        discount: true,
+        taxRate: false,
+        lineTotal: true,
+        grossPrice: false,
     },
     labels: defaultLabels,
-    style: 'hidroterm',
+    style: 'corporate',
     pageSize: 'A4'
 };
 
@@ -210,30 +220,49 @@ export function TemplateEditorScreen({ navigation }: any) {
                 )}
 
                 {activeTab === 'columns' && (
-
                     <Card style={styles.card}>
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Table Columns</Text>
                         <Text style={[styles.hint, { color: mutedColor }]}>Choose which columns appear in the items table.</Text>
 
                         <View style={styles.row}>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Row Number</Text>
+                            <Switch value={config.visibleColumns.rowNumber} onValueChange={() => toggleColumn('rowNumber')} />
+                        </View>
+                        <View style={styles.row}>
                             <Text style={[styles.itemLabel, { color: textColor }]}>SKU / Code</Text>
                             <Switch value={config.visibleColumns.sku} onValueChange={() => toggleColumn('sku')} />
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Description</Text>
+                            <Switch value={config.visibleColumns.description} onValueChange={() => toggleColumn('description')} />
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Quantity</Text>
+                            <Switch value={config.visibleColumns.quantity} onValueChange={() => toggleColumn('quantity')} />
                         </View>
                         <View style={styles.row}>
                             <Text style={[styles.itemLabel, { color: textColor }]}>Unit (pcs, hrs, etc)</Text>
                             <Switch value={config.visibleColumns.unit} onValueChange={() => toggleColumn('unit')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Item Tax Rate</Text>
-                            <Switch value={config.visibleColumns.tax} onValueChange={() => toggleColumn('tax')} />
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Unit Price</Text>
+                            <Switch value={config.visibleColumns.unitPrice} onValueChange={() => toggleColumn('unitPrice')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Quantity</Text>
-                            <Switch value={config.visibleColumns.quantity} onValueChange={() => toggleColumn('quantity')} disabled />
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Discount %</Text>
+                            <Switch value={config.visibleColumns.discount} onValueChange={() => toggleColumn('discount')} />
                         </View>
                         <View style={styles.row}>
-                            <Text style={[styles.itemLabel, { color: textColor }]}>Price</Text>
-                            <Switch value={config.visibleColumns.price} onValueChange={() => toggleColumn('price')} />
+                            <Text style={[styles.itemLabel, { color: textColor }]}>VAT / Tax Rate</Text>
+                            <Switch value={config.visibleColumns.taxRate} onValueChange={() => toggleColumn('taxRate')} />
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Line Total</Text>
+                            <Switch value={config.visibleColumns.lineTotal} onValueChange={() => toggleColumn('lineTotal')} />
+                        </View>
+                        <View style={styles.row}>
+                            <Text style={[styles.itemLabel, { color: textColor }]}>Price incl. VAT</Text>
+                            <Switch value={config.visibleColumns.grossPrice} onValueChange={() => toggleColumn('grossPrice')} />
                         </View>
                     </Card>
                 )}

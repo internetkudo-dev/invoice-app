@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl, Modal, TextInput } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { Card, Button } from '../../components/common';
@@ -13,6 +13,7 @@ interface JoinRequest {
     created_at: string;
     user?: {
         email: string;
+        name?: string;
     };
 }
 
@@ -22,6 +23,10 @@ export function JoinRequestsScreen({ navigation }: any) {
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [requests, setRequests] = useState<JoinRequest[]>([]);
+
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [selectedRequest, setSelectedRequest] = useState<JoinRequest | null>(null);
+    const [editForm, setEditForm] = useState({ firstName: '', lastName: '', role: 'employee' });
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -54,18 +59,27 @@ export function JoinRequestsScreen({ navigation }: any) {
 
                 if (error) throw error;
 
-                // Get user emails for each request
-                const requestsWithUsers = await Promise.all(
-                    (memberships || []).map(async (m) => {
-                        const { data: userData } = await supabase.auth.admin.getUserById(m.user_id);
-                        return {
-                            ...m,
-                            user: { email: userData?.user?.email || 'Unknown' }
-                        };
-                    })
-                );
+                // Get user emails from profiles
+                const userIds = memberships.map(m => m.user_id);
+                const { data: userProfiles } = await supabase
+                    .from('profiles')
+                    .select('id, email, first_name, last_name')
+                    .in('id', userIds);
 
-                setRequests(memberships || []);
+                const profileMap = new Map(userProfiles?.map(p => [p.id, p]));
+
+                const requestsWithUsers = memberships.map(m => {
+                    const profile = profileMap.get(m.user_id);
+                    return {
+                        ...m,
+                        user: {
+                            email: profile?.email || 'Unknown',
+                            name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : undefined
+                        }
+                    };
+                });
+
+                setRequests(requestsWithUsers);
             }
         } catch (error) {
             console.error('Error fetching requests:', error);
@@ -75,34 +89,57 @@ export function JoinRequestsScreen({ navigation }: any) {
         }
     };
 
-    const handleApprove = async (requestId: string) => {
-        Alert.alert(
-            'Approve Request',
-            'This user will gain access to your company data.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Approve',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const { error } = await supabase
-                                .from('memberships')
-                                .update({ status: 'active', role: 'employee' })
-                                .eq('id', requestId);
+    const openEditModal = (request: JoinRequest) => {
+        setSelectedRequest(request);
+        // split name if available
+        const names = (request.user?.name || '').split(' ');
+        setEditForm({
+            firstName: names[0] || '',
+            lastName: names.slice(1).join(' ') || '',
+            role: 'employee'
+        });
+        setEditModalVisible(true);
+    };
 
-                            if (error) throw error;
-                            Alert.alert('Success', 'Request approved!');
-                            fetchRequests();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message);
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+    const handleApproveWithEdit = async () => {
+        if (!selectedRequest) return;
+        setLoading(true);
+        try {
+            // 1. Update Membership
+            const { error: memError } = await supabase
+                .from('memberships')
+                .update({ status: 'active', role: editForm.role })
+                .eq('id', selectedRequest.id);
+
+            if (memError) throw memError;
+
+            // 2. Update Employee Record
+            const { error: empError } = await supabase
+                .from('employees')
+                .update({
+                    status: 'active',
+                    first_name: editForm.firstName,
+                    last_name: editForm.lastName,
+                    role: editForm.role
+                })
+                .eq('user_id', selectedRequest.user_id);
+
+            if (empError) console.error("Error updating employee:", empError);
+
+            // 3. Update Profile Name (optional but good for consistency)
+            await supabase.from('profiles').update({
+                first_name: editForm.firstName,
+                last_name: editForm.lastName
+            }).eq('id', selectedRequest.user_id);
+
+            Alert.alert('Success', 'User approved and updated successfully.');
+            setEditModalVisible(false);
+            fetchRequests();
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleReject = async (requestId: string) => {
@@ -136,6 +173,53 @@ export function JoinRequestsScreen({ navigation }: any) {
         );
     };
 
+    const renderEditModal = () => (
+        <Modal visible={editModalVisible} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
+                    <Text style={[styles.modalTitle, { color: textColor }]}>Approve & Edit</Text>
+
+                    <Text style={[styles.label, { color: mutedColor }]}>First Name</Text>
+                    <TextInput
+                        style={[styles.input, { color: textColor, borderColor: isDark ? '#334155' : '#e2e8f0', backgroundColor: isDark ? '#0f172a' : '#f1f5f9' }]}
+                        value={editForm.firstName}
+                        onChangeText={(t) => setEditForm(prev => ({ ...prev, firstName: t }))}
+                    />
+
+                    <Text style={[styles.label, { color: mutedColor }]}>Last Name</Text>
+                    <TextInput
+                        style={[styles.input, { color: textColor, borderColor: isDark ? '#334155' : '#e2e8f0', backgroundColor: isDark ? '#0f172a' : '#f1f5f9' }]}
+                        value={editForm.lastName}
+                        onChangeText={(t) => setEditForm(prev => ({ ...prev, lastName: t }))}
+                    />
+
+                    <Text style={[styles.label, { color: mutedColor }]}>Role</Text>
+                    <View style={[styles.roleSelector, { flexDirection: 'row', gap: 8 }]}>
+                        {['employee', 'manager', 'admin'].map(r => (
+                            <TouchableOpacity
+                                key={r}
+                                onPress={() => setEditForm(prev => ({ ...prev, role: r }))}
+                                style={[
+                                    styles.roleOption,
+                                    editForm.role === r ? { backgroundColor: primaryColor } : { backgroundColor: isDark ? '#334155' : '#e2e8f0' }
+                                ]}
+                            >
+                                <Text style={{ color: editForm.role === r ? '#fff' : mutedColor }}>
+                                    {r.charAt(0).toUpperCase() + r.slice(1)}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    <View style={styles.modalActions}>
+                        <Button title="Cancel" onPress={() => setEditModalVisible(false)} style={{ flex: 1, backgroundColor: mutedColor }} />
+                        <Button title="Confirm Approval" onPress={handleApproveWithEdit} style={{ flex: 1 }} />
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+
     const renderRequest = ({ item }: { item: JoinRequest }) => (
         <Card style={[styles.requestCard, { backgroundColor: cardBg }]}>
             <View style={styles.requestInfo}>
@@ -144,8 +228,9 @@ export function JoinRequestsScreen({ navigation }: any) {
                 </View>
                 <View style={styles.requestDetails}>
                     <Text style={[styles.email, { color: textColor }]}>
-                        {item.user?.email || `User ${item.user_id.substring(0, 8)}...`}
+                        {item.user?.name || item.user?.email || 'Unknown'}
                     </Text>
+                    <Text style={[styles.meta, { color: mutedColor, fontSize: 11 }]}>{item.user?.email}</Text>
                     <View style={styles.metaRow}>
                         <Clock color={mutedColor} size={12} />
                         <Text style={[styles.meta, { color: mutedColor }]}>
@@ -156,10 +241,10 @@ export function JoinRequestsScreen({ navigation }: any) {
             </View>
             <View style={styles.actions}>
                 <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#10b98115' }]}
-                    onPress={() => handleApprove(item.id)}
+                    style={[styles.actionBtn, { backgroundColor: '#10b98115', width: 'auto', paddingHorizontal: 12 }]}
+                    onPress={() => openEditModal(item)}
                 >
-                    <Check color="#10b981" size={20} />
+                    <Text style={{ color: '#10b981', fontWeight: 'bold' }}>Review</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.actionBtn, { backgroundColor: '#ef444415' }]}
@@ -202,6 +287,7 @@ export function JoinRequestsScreen({ navigation }: any) {
                     }
                 />
             )}
+            {renderEditModal()}
         </View>
     );
 }
@@ -237,8 +323,8 @@ const styles = StyleSheet.create({
         marginRight: 12
     },
     requestDetails: { flex: 1 },
-    email: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
-    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    email: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     meta: { fontSize: 12 },
     actions: { flexDirection: 'row', gap: 8 },
     actionBtn: {
@@ -256,4 +342,37 @@ const styles = StyleSheet.create({
     },
     emptyText: { fontSize: 16, fontWeight: '600', marginTop: 16 },
     emptyHint: { fontSize: 14, textAlign: 'center', marginTop: 8 },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: 24
+    },
+    modalContent: {
+        padding: 24,
+        borderRadius: 16,
+        gap: 12
+    },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+    label: { fontSize: 12, fontWeight: '600', marginTop: 8 },
+    input: {
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14
+    },
+    roleSelector: { marginVertical: 8 },
+    roleOption: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'transparent'
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 16
+    }
 });

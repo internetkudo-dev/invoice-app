@@ -68,33 +68,63 @@ export function AdvancedSettingsScreen({ navigation }: any) {
 
     const handleExportData = async (format: 'json' | 'csv') => {
         try {
-            const { data: invoices } = await supabase.from('invoices').select('*').eq('user_id', user?.id);
-            const { data: clients } = await supabase.from('clients').select('*').eq('user_id', user?.id);
-            const { data: products } = await supabase.from('products').select('*').eq('user_id', user?.id);
-            const { data: expenses } = await supabase.from('expenses').select('*').eq('user_id', user?.id);
+            Alert.alert('Exporting...', 'Please wait while we prepare your data.');
+
+            const { data: invoices, error: invoicesError } = await supabase.from('invoices').select('*').eq('user_id', user?.id);
+            const { data: clients, error: clientsError } = await supabase.from('clients').select('*').eq('user_id', user?.id);
+            const { data: products, error: productsError } = await supabase.from('products').select('*').eq('user_id', user?.id);
+            const { data: expenses, error: expensesError } = await supabase.from('expenses').select('*').eq('user_id', user?.id);
+            const { data: vendors, error: vendorsError } = await supabase.from('vendors').select('*').eq('user_id', user?.id);
+
+            if (invoicesError) console.error('Invoices error:', invoicesError);
+            if (clientsError) console.error('Clients error:', clientsError);
+            if (productsError) console.error('Products error:', productsError);
+            if (expensesError) console.error('Expenses error:', expensesError);
+            if (vendorsError) console.error('Vendors error:', vendorsError);
+
+            // Create a map of client IDs to names
+            const clientMap: { [key: string]: string } = {};
+            clients?.forEach(c => { clientMap[c.id] = c.name; });
 
             if (format === 'json') {
                 const backupData = {
+                    exportDate: new Date().toISOString(),
                     invoices: invoices || [],
                     clients: clients || [],
                     products: products || [],
-                    expenses: expenses || []
+                    expenses: expenses || [],
+                    vendors: vendors || []
                 };
                 const content = JSON.stringify(backupData, null, 2);
-                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
-                const fileUri = `${folder}backup.json`;
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
+                const dateStr = new Date().toISOString().split('T')[0];
+                const fileUri = `${folder}backup_${dateStr}.json`;
                 await FileSystem.writeAsStringAsync(fileUri, content);
-                await Sharing.shareAsync(fileUri);
+                await Sharing.shareAsync(fileUri, {
+                    mimeType: 'application/json',
+                    dialogTitle: 'Export Backup Data'
+                });
             } else {
-                const csvHeader = 'Date,Number,Client,Total,Status\n';
-                const csvRows = invoices?.map(inv => `${inv.issue_date},${inv.invoice_number},${inv.client_id},${inv.total_amount},${inv.status}`).join('\n') || '';
-                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory;
-                const fileUri = `${folder}invoices.csv`;
+                const csvHeader = 'Date,Invoice Number,Client,Total Amount,Status\n';
+                const csvRows = invoices?.map(inv => {
+                    const clientName = clientMap[inv.client_id] || 'Unknown';
+                    return `${inv.issue_date || ''},${inv.invoice_number || ''},"${clientName}",${inv.total_amount || 0},${inv.status || 'draft'}`;
+                }).join('\n') || '';
+
+                const folder = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
+                const dateStr = new Date().toISOString().split('T')[0];
+                const fileUri = `${folder}invoices_${dateStr}.csv`;
                 await FileSystem.writeAsStringAsync(fileUri, csvHeader + csvRows);
-                await Sharing.shareAsync(fileUri);
+                await Sharing.shareAsync(fileUri, {
+                    mimeType: 'text/csv',
+                    dialogTitle: 'Export Invoices'
+                });
             }
-        } catch (error) {
-            Alert.alert('Error', 'Export failed');
+
+            Alert.alert('Success', `Export completed successfully!`);
+        } catch (error: any) {
+            console.error('Export error:', error);
+            Alert.alert('Error', `Export failed: ${error.message || 'Unknown error'}`);
         }
     };
 

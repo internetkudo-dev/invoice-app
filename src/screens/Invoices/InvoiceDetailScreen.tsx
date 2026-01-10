@@ -93,10 +93,10 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
     };
 
     useEffect(() => {
-        if (invoice && profile && autoPreview) {
+        if (invoice && profile && items.length > 0 && autoPreview) {
             handlePrint();
         }
-    }, [invoice, profile]);
+    }, [invoice, profile, items]);
 
     const buildInvoiceData = (): InvoiceData | null => {
         if (!invoice || !profile) return null;
@@ -166,8 +166,35 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                 total: Number(invoice.total_amount),
                 amountReceived: Number(invoice.amount_received),
                 changeAmount: Number(invoice.change_amount),
+                discountPercent: Number(invoice.discount_percent) || 0,
             },
-            config: profile.template_config,
+            config: {
+                showLogo: true,
+                showSignature: true,
+                showBuyerSignature: true,
+                showStamp: true,
+                showQrCode: true,
+                showNotes: true,
+                showDiscount: true,
+                showTax: true,
+                showBankDetails: true,
+                pageSize: 'A4',
+                labels: {},
+                ...profile.template_config,
+                visibleColumns: {
+                    rowNumber: true,
+                    description: true,
+                    quantity: true,
+                    unit: true,
+                    unitPrice: true,
+                    lineTotal: true,
+                    grossPrice: true,
+                    ...profile.template_config?.visibleColumns,
+                    taxRate: true,
+                    discount: true,
+                    sku: true
+                }
+            },
         };
     };
 
@@ -176,7 +203,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         if (!data) { Alert.alert('Error', 'Unable to generate PDF'); return; }
 
         setGenerating(true);
-        let templateToUse: TemplateType = 'hidroterm';
+        let templateToUse: TemplateType = 'corporate';
         const result = await generatePdf(data, templateToUse);
         setGenerating(false);
 
@@ -207,7 +234,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
             const data = buildInvoiceData();
             if (!data) return;
 
-            let templateToUse: TemplateType = 'hidroterm';
+            let templateToUse: TemplateType = 'corporate';
             const pdfResult = await generatePdf(data, templateToUse);
             if (!pdfResult.success || !pdfResult.uri) throw new Error('Failed to generate PDF');
 
@@ -233,7 +260,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
-        let templateToUse: TemplateType = 'hidroterm';
+        let templateToUse: TemplateType = 'corporate';
         setGenerating(true);
         const result = await generatePdf(data, templateToUse);
         setGenerating(false);
@@ -250,7 +277,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
-        let templateToUse: TemplateType = 'hidroterm';
+        let templateToUse: TemplateType = 'corporate';
         setGenerating(true);
         const result = await printPdf(data, templateToUse);
         setGenerating(false);
@@ -264,7 +291,7 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
         const data = buildInvoiceData();
         if (!data) return;
 
-        const html = generateInvoiceHtml(data, 'hidroterm');
+        const html = generateInvoiceHtml(data, 'corporate');
         setHtmlContent(html);
         setShowPreview(true);
     };
@@ -445,7 +472,9 @@ export function InvoiceDetailScreen({ navigation, route }: InvoiceDetailScreenPr
                                     {item.quantity} x {formatCurrency(Number(item.unit_price), profile?.currency)}
                                 </Text>
                             </View>
-                            <Text style={[styles.itemTotal, { color: textColor }]}>{formatCurrency(Number(item.amount), profile?.currency)}</Text>
+                            <Text style={[styles.itemTotal, { color: textColor }]}>
+                                {formatCurrency(Number(item.amount) * (1 + (item.tax_rate || 0) / 100), profile?.currency)}
+                            </Text>
                         </View>
                     ))}
 

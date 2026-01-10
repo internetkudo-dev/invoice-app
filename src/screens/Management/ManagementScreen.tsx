@@ -46,37 +46,34 @@ export function ManagementScreen({ navigation }: any) {
     const fetchStats = async () => {
         if (!user) return;
         try {
-            const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
-            const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
-
             // Fetch clients count
             const { count: clientsCount } = await supabase
                 .from('clients')
                 .select('id', { count: 'exact', head: true })
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .eq('user_id', user.id);
 
             // Fetch products count and value
             const { data: products } = await supabase
                 .from('products')
-                .select('price, stock')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .select('unit_price, stock_quantity')
+                .eq('user_id', user.id);
 
-            const inventoryValue = products?.reduce((sum, p) => sum + (Number(p.price || 0) * Number(p.stock || 0)), 0) || 0;
+            const inventoryValue = products?.reduce((sum, p) => sum + (Number(p.unit_price || 0) * Number(p.stock_quantity || 0)), 0) || 0;
 
             // Fetch vendors count
             const { count: vendorsCount } = await supabase
                 .from('vendors')
                 .select('id', { count: 'exact', head: true })
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                .eq('user_id', user.id);
 
             // Fetch revenue from invoices
             const { data: invoices } = await supabase
                 .from('invoices')
-                .select('total')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .select('total_amount')
+                .eq('user_id', user.id)
                 .eq('status', 'paid');
 
-            const totalRevenue = invoices?.reduce((sum, inv) => sum + Number(inv.total || 0), 0) || 0;
+            const totalRevenue = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
 
             setStats({
                 totalClients: clientsCount || 0,

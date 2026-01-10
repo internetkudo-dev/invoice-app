@@ -60,13 +60,21 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
     const fetchVendors = async () => {
         if (!user) return;
         try {
-            const { data: profileData } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
+            console.log('Step 1: Fetching profile...');
+            const { data: profileData, error: profileError } = await supabase.from('profiles').select('company_id, active_company_id').eq('id', user.id).single();
+
+            if (profileError) {
+                console.error('Profile fetch error:', profileError);
+                return;
+            }
+
             const companyId = profileData?.active_company_id || profileData?.company_id || user.id;
+            console.log('Step 2: Fetching vendors with companyId:', companyId);
 
             const { data, error } = await supabase
                 .from('vendors')
                 .select('*')
-                .or(`user_id.eq.${user.id},company_id.eq.${companyId}`)
+                .eq('user_id', user.id)
                 .order('name');
 
             if (error) {
@@ -75,14 +83,19 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 return;
             }
 
+            console.log('Step 3: Vendors fetched, count:', data?.length);
             if (data) {
                 setVendors(data);
-                // applyFiltersAndSort called by useEffect automatically when vendors changes
 
-                const { data: expenses } = await supabase
+                console.log('Step 4: Fetching expenses...');
+                const { data: expenses, error: expenseError } = await supabase
                     .from('expenses')
                     .select('vendor_id, amount')
-                    .or(`user_id.eq.${user.id},company_id.eq.${companyId}`);
+                    .eq('user_id', user.id);
+
+                if (expenseError) {
+                    console.error('Expenses fetch error:', expenseError);
+                }
 
                 if (expenses) {
                     const expenseMap: { [key: string]: number } = {};
@@ -95,7 +108,7 @@ export function VendorsScreen({ navigation }: VendorsScreenProps) {
                 }
             }
         } catch (err) {
-            console.error(err);
+            console.error('Unexpected error:', err);
         }
     };
 

@@ -48,7 +48,7 @@ interface InvoiceFormScreenProps {
 
 export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps) {
     const { user } = useAuth();
-    const { isDark, language } = useTheme();
+    const { isDark, language, primaryColor } = useTheme();
     const { invoiceId, type = 'invoice', subtype = 'regular', documentKey } = route.params || {};
 
     const [loading, setLoading] = useState(false);
@@ -84,7 +84,6 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     const mutedColor = isDark ? '#94a3b8' : '#64748b';
     const cardBg = isDark ? '#1e293b' : '#ffffff';
     const borderColor = isDark ? '#334155' : '#e2e8f0';
-    const primaryColor = profile?.primary_color || '#818cf8';
 
     useEffect(() => {
         loadData();
@@ -164,6 +163,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     };
 
     const handleAddItem = (product?: Product) => {
+        const currentGlobalDiscount = parseFloat(discount) || 0;
         const newItem: Partial<InvoiceItem> = {
             id: `temp-${Date.now()}`,
             description: product?.name || '',
@@ -171,8 +171,17 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             unit_price: product?.unit_price || 0,
             amount: product?.unit_price || 0,
             product_id: product?.id,
-            tax_rate: 0
+            tax_rate: product?.tax_rate || 0,
+            discount: currentGlobalDiscount,
+            sku: (product as any)?.sku || '',
         };
+
+        // Calculate initial amount with discount
+        const price = newItem.unit_price || 0;
+        const subtotal = 1 * price;
+        const discountAmount = subtotal * (currentGlobalDiscount / 100);
+        newItem.amount = subtotal - discountAmount;
+
         setItems([...items, newItem]);
         setShowProductPicker(false);
     };
@@ -181,12 +190,16 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
         const newItems = [...items];
         newItems[index] = { ...newItems[index], [field]: value };
 
-        // Recalculate amount
+        // Recalculate amount including discount
         const qty = Number(newItems[index].quantity) || 0;
         const price = Number(newItems[index].unit_price) || 0;
-        // Simple logic: amount = (qty * price)
+        const discountPercent = Number(newItems[index].discount) || 0;
 
-        newItems[index].amount = (qty * price);
+        // amount = (qty * price) - discount
+        const subtotal = qty * price;
+        const discountAmount = subtotal * (discountPercent / 100);
+        newItems[index].amount = subtotal - discountAmount;
+
         setItems(newItems);
     };
 
@@ -198,42 +211,47 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
     const calculateTotals = () => {
         const subtotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-        // Tax logic could be complex (per item), simplifying for UI display here
-        // If tax_rate is per item, we need to sum item taxes.
-        // Tax logic
+
+        // Sum of all item discounts (calculated as original_price * qty * discount_percent)
+        // item.amount is already discounted. 
+        // We need to trace back or sum up differently if we want to show Total Discount amount.
+        // item.amount = (qty * price) * (1 - discount/100)
+        // discountAmount = (qty * price) * (discount/100)
+        const totalDiscount = items.reduce((sum, item) => {
+            const qty = Number(item.quantity) || 0;
+            const price = Number(item.unit_price) || 0;
+            const discPercent = Number(item.discount) || 0;
+            const itemSubtotal = qty * price;
+            return sum + (itemSubtotal * (discPercent / 100));
+        }, 0);
+
         const tax = items.reduce((sum, item) => {
             const amount = Number(item.amount) || 0;
             const rate = Number(item.tax_rate) || 0;
             return sum + (amount * (rate / 100));
         }, 0);
 
-        const discountPercent = parseFloat(discount) || 0;
-        const discountAmount = (subtotal * discountPercent) / 100;
-        const subtotalAfterDiscount = subtotal - discountAmount;
-        // Tax typically calculated on discounted amount or subtotal depending on region.
-        // Assuming tax is calculated on item level, effectively applied to subtotal. 
-        // If discount is 'global invoice discount', we usually reduce subtotal before tax or reduce total.
-        // Let's assume standard: Subtotal -> Discount -> Taxable Amount -> Tax -> Total.
-        // BUT item amounts already include/exclude tax? 
-        // Based on loop above, 'tax' is sum of item taxes.
-        // If we apply global discount, we should probably reduce tax proportionally?
-        // Simple approach: Total = (Subtotal + Tax) - DiscountAmount.
-        // Or: Discount reduces taxable base.
-        // Let's go with: Discount on Subtotal. Tax recalculated? No, complicated.
-        // Simplest valid model: Final Total = (Subtotal + Tax) * (1 - discount/100).
-        // Let's stick to user request: "add discount... overwritten on this invoice".
+        // The 'subtotal' variable here is actually the "Net Total after Discount" based on item.amount sum.
+        // But usually Subtotal means "Before Discount".
+        // Let's adjust to standard meanings for the summary object if needed.
+        // However, existing logic seemed to treat 'subtotal' as sum of amounts.
+        // If we want to show "Gross Subtotal" (before discount), we should calculate it:
+        const grossSubtotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unit_price) || 0)), 0);
 
-        // Let's implement: Discount reduces the Total (Subtotal + Tax).
-        // total = (subtotal + tax) - ((subtotal + tax) * discount / 100)
-
-        const totalBeforeDiscount = subtotal + tax;
-        const totalDiscount = (totalBeforeDiscount * discountPercent) / 100;
+        // Current implementation seems to expect:
+        // subtotal: Sum of item amounts (Net of discount? Or Gross?) 
+        // Looking at generateInvoiceHtml, it uses subtotal - discount.
+        // So let's stick to:
+        // Subtotal = Gross Sum
+        // Discount = Total Discount
+        // Tax = Tax on Net
+        // Total = Net + Tax
 
         return {
-            subtotal,
+            subtotal: grossSubtotal,
             tax,
             discount: totalDiscount,
-            total: totalBeforeDiscount - totalDiscount
+            total: (grossSubtotal - totalDiscount) + tax
         };
     };
 
@@ -306,6 +324,8 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                 unit: item.unit || 'pcs',
                 unit_price: item.unit_price,
                 tax_rate: item.tax_rate,
+                discount: item.discount || 0,
+                sku: item.sku || '',
                 amount: item.amount
             }));
 
@@ -391,7 +411,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             }
         };
 
-        const html = generateInvoiceHtml(invoiceData, 'hidroterm');
+        const html = generateInvoiceHtml(invoiceData, 'corporate');
         setPreviewHtml(html);
         setShowPreview(true);
     };
@@ -401,7 +421,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => navigation.navigate('InvoicesList')} style={styles.backButton}>
                     <ArrowLeft color={textColor} size={24} />
                 </TouchableOpacity>
                 <View>
@@ -542,10 +562,21 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                                 keyboardType="numeric"
                                             />
                                         </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.inputLabel, { color: mutedColor }]}>Rabat %</Text>
+                                            <TextInput
+                                                style={[styles.smallInput, { color: textColor, borderColor }]}
+                                                value={String(item.discount || '')}
+                                                onChangeText={(text) => handleUpdateItem(index, 'discount', Number(text))}
+                                                keyboardType="numeric"
+                                                placeholder="0"
+                                                placeholderTextColor={mutedColor}
+                                            />
+                                        </View>
                                         <View style={{ flex: 2 }}>
                                             <Text style={[styles.inputLabel, { color: mutedColor, textAlign: 'right' }]}>Total</Text>
                                             <Text style={[styles.itemRowTotal, { color: textColor }]}>
-                                                {formatCurrency(Number(item.amount), profile?.currency)}
+                                                {formatCurrency(Number(item.amount) * (1 + (item.tax_rate || 0) / 100), profile?.currency)}
                                             </Text>
                                         </View>
                                     </View>
@@ -569,11 +600,26 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
 
                                 {items.length > 0 && (
                                     <View style={[styles.summaryRow, { marginTop: 12, alignItems: 'center' }]}>
-                                        <Text style={{ color: mutedColor }}>Discount (%)</Text>
+                                        <Text style={{ color: mutedColor }}>Rabat (%)</Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderRadius: 8, borderWidth: 1, borderColor }}>
                                             <TextInput
                                                 value={discount}
-                                                onChangeText={setDiscount}
+                                                onChangeText={(text) => {
+                                                    setDiscount(text);
+                                                    const newPercent = parseFloat(text) || 0;
+                                                    const newItems = items.map(item => {
+                                                        const qty = Number(item.quantity) || 0;
+                                                        const price = Number(item.unit_price) || 0;
+                                                        const subtotal = qty * price;
+                                                        const discountAmount = subtotal * (newPercent / 100);
+                                                        return {
+                                                            ...item,
+                                                            discount: newPercent,
+                                                            amount: subtotal - discountAmount
+                                                        };
+                                                    });
+                                                    setItems(newItems);
+                                                }}
                                                 keyboardType="numeric"
                                                 style={{ paddingVertical: 4, paddingHorizontal: 8, color: textColor, fontWeight: '600', minWidth: 60, textAlign: 'right' }}
                                             />
@@ -612,11 +658,11 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
             {/* Sticky Actions Footer */}
             <View style={[styles.footer, { backgroundColor: isDark ? '#1e293b' : '#fff', borderTopColor: borderColor }]}>
                 <TouchableOpacity
-                    style={[styles.previewButton, { borderColor: borderColor }]}
-                    onPress={handlePreview}
+                    style={[styles.addItemButton, { backgroundColor: primaryColor + '15', borderColor: primaryColor }]}
+                    onPress={() => setShowProductPicker(true)}
                 >
-                    <Eye color={textColor} size={20} />
-                    <Text style={[styles.previewText, { color: textColor }]}>Preview</Text>
+                    <Plus color={primaryColor} size={20} />
+                    <Text style={[styles.addItemText, { color: primaryColor }]}>{t('addItem', language)}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -757,7 +803,7 @@ export function InvoiceFormScreen({ navigation, route }: InvoiceFormScreenProps)
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.modalItemTitle, { color: textColor }]}>{product.name}</Text>
                                         <Text style={{ color: mutedColor, fontSize: 12 }}>
-                                            {formatCurrency(Number(product.unit_price), profile?.currency)}
+                                            {formatCurrency(Number(product.unit_price) * (1 + (product.tax_rate || 0) / 100), profile?.currency)}
                                         </Text>
                                     </View>
                                 </TouchableOpacity>
@@ -884,5 +930,16 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 10,
-    }
+    },
+    addItemButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 54,
+        borderRadius: 16,
+        borderWidth: 1,
+        gap: 8,
+    },
+    addItemText: { fontSize: 16, fontWeight: '600' }
 });

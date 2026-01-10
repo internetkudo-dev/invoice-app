@@ -156,6 +156,7 @@ import { ShiftFormScreen } from '../screens/Time/ShiftFormScreen';
 import { PayrollDashboardScreen } from '../screens/Payroll/PayrollDashboardScreen';
 import { PayrollDetailScreen } from '../screens/Payroll/PayrollDetailScreen';
 import { ComplianceScreen } from '../screens/Payroll/ComplianceScreen';
+import { ComplianceFormScreen } from '../screens/Payroll/ComplianceFormScreen';
 import { HRDashboardScreen, JoinRequestsScreen } from '../screens/HR';
 
 function ManagementStack() {
@@ -194,6 +195,7 @@ function ManagementStack() {
             {/* Finance */}
             <Stack.Screen name="Payroll" component={PayrollDashboardScreen} />
             <Stack.Screen name="Compliance" component={ComplianceScreen} />
+            <Stack.Screen name="ComplianceForm" component={ComplianceFormScreen} />
         </Stack.Navigator>
     );
 }
@@ -227,6 +229,7 @@ function HRStack() {
             <Stack.Screen name="Payroll" component={PayrollDashboardScreen} />
             <Stack.Screen name="PayrollDetail" component={PayrollDetailScreen} />
             <Stack.Screen name="Compliance" component={ComplianceScreen} />
+            <Stack.Screen name="ComplianceForm" component={ComplianceFormScreen} />
         </Stack.Navigator>
     );
 }
@@ -321,29 +324,52 @@ function AuthStack() {
     );
 }
 
+import { ApprovalPendingScreen } from '../screens/Auth/ApprovalPendingScreen';
+
 export function AppNavigator() {
     const { user, loading: authLoading } = useAuth();
     const { isDark } = useTheme();
     const [isLocked, setIsLocked] = useState(false);
     const [checkingLock, setCheckingLock] = useState(true);
+    // New state for membership status
+    const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (user) {
-            checkBiometricSetting();
+            checkUserStatus();
         } else {
             setIsLocked(false);
+            setIsPending(false);
             setCheckingLock(false);
         }
     }, [user]);
 
-    const checkBiometricSetting = async () => {
+    const checkUserStatus = async () => {
         try {
-            const { data } = await supabase.from('profiles').select('biometric_enabled').eq('id', user?.id).single();
-            if (data?.biometric_enabled) {
+            // Check Biometrics
+            const { data: profile } = await supabase.from('profiles').select('biometric_enabled').eq('id', user?.id).single();
+            if (profile?.biometric_enabled) {
                 setIsLocked(true);
             }
+
+            // Check Employment Status
+            const { data: employeeData } = await supabase
+                .from('employees')
+                .select('status')
+                .eq('user_id', user?.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            // If user has an employee record and it is pending, BLOCK access.
+            if (employeeData && employeeData.status === 'pending') {
+                setIsPending(true);
+            } else {
+                setIsPending(false);
+            }
+
         } catch (error) {
-            console.error('Error checking biometrics:', error);
+            console.error('Error checking status:', error);
         } finally {
             setCheckingLock(false);
         }
@@ -354,6 +380,14 @@ export function AppNavigator() {
             <View style={[styles.loading, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' }]}>
                 <ActivityIndicator size="large" color="#818cf8" />
             </View>
+        );
+    }
+
+    if (user && isPending) {
+        return (
+            <NavigationContainer theme={isDark ? CustomDarkTheme : CustomLightTheme}>
+                <ApprovalPendingScreen />
+            </NavigationContainer>
         );
     }
 

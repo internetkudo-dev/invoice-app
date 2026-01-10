@@ -52,12 +52,22 @@ export interface TemplateConfig {
     showSignature: boolean;
     showBuyerSignature: boolean;
     showStamp: boolean;
+    showQrCode: boolean;
+    showNotes: boolean;
+    showDiscount: boolean;
+    showTax: boolean;
+    showBankDetails: boolean;
     visibleColumns: {
+        rowNumber: boolean;
         sku: boolean;
-        unit: boolean;
-        tax: boolean;
+        description: boolean;
         quantity: boolean;
-        price: boolean;
+        unit: boolean;
+        unitPrice: boolean;
+        discount: boolean;
+        taxRate: boolean;
+        lineTotal: boolean;
+        grossPrice: boolean;
     };
     labels: Record<string, string>;
     pageSize: 'A4' | 'A5' | 'Receipt';
@@ -158,8 +168,10 @@ export interface InvoiceItem {
     quantity: number;
     unit_price: number;
     tax_rate?: number;
+    discount?: number;
     amount: number;
     unit?: string;
+    sku?: string;
 }
 
 export interface Payment {
@@ -355,7 +367,7 @@ export interface InvoiceData {
     config?: TemplateConfig;
 }
 
-export type TemplateType = 'hidroterm';
+export type TemplateType = 'corporate';
 
 
 export interface Company {
@@ -395,4 +407,16 @@ export interface Membership {
     role: 'owner' | 'admin' | 'worker';
     created_at: string;
     company?: Company;
+}
+
+export interface Compliance {
+    id: string;
+    company_id: string;
+    title: string;
+    description?: string;
+    status: 'pending' | 'completed' | 'expired';
+    due_date?: string;
+    completed_at?: string;
+    attachment_url?: string;
+    created_at: string;
 }

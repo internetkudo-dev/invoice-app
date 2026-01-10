@@ -2,331 +2,385 @@ import { InvoiceData } from '../../../types';
 import { pdfTranslations } from '../translations';
 
 export function corporateTemplate(data: InvoiceData): string {
-  const { company, client, details, items, summary } = data;
-  const lang = details.language || 'en';
-  const t = pdfTranslations[lang] || pdfTranslations.en;
+  const primaryColor = '#000000'; // Strict black/grayscale as per PDF
+  const lang = data.details.language || 'sq'; // Default to Albanian as per PDF
+  const t = pdfTranslations[lang] || pdfTranslations.sq || pdfTranslations.en;
 
+  // Default config with all visibility options
+  const defaultConfig = {
+    showLogo: true,
+    showSignature: true,
+    showBuyerSignature: true,
+    showStamp: true,
+    showQrCode: true,
+    showNotes: true,
+    showDiscount: true,
+    showTax: true,
+    showBankDetails: true,
+    visibleColumns: {
+      rowNumber: true,
+      sku: true,
+      description: true,
+      quantity: true,
+      unit: true,
+      unitPrice: true,
+      discount: true,
+      taxRate: true,
+      lineTotal: true,
+      grossPrice: true,
+    },
+    pageSize: 'A4' as const,
+  };
+
+  const config = { ...defaultConfig, ...data.config, visibleColumns: { ...defaultConfig.visibleColumns, ...data.config?.visibleColumns } };
+
+  const pageSize = config.pageSize || 'A4';
+  const isA5 = pageSize === 'A5';
+  const cols = config.visibleColumns;
+
+  // Formatters
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(lang === 'sq' ? 'sq-AL' : lang === 'de' ? 'de-DE' : 'en-US', {
-      style: 'currency',
-      currency: details.currency,
+    return new Intl.NumberFormat('de-DE', { // European format 1.234,56
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${dd}/${mm}/${yyyy}`; // DD/MM/YYYY format
+  };
+
+
+  // Document type labels in Albanian
+  const documentLabels: Record<string, string> = {
+    'regular': 'Faturë',
+    'delivery_note': 'Fletëdërgesë',
+    'offer': 'Ofertë',
+    'order': 'Porosi',
+    'pro_invoice': 'Profaturë',
+  };
+
+  // Get the document label based on subtype
+  const documentLabel = documentLabels[data.details.subtype || 'regular'] || 'Faturë';
+
+  // Generate QR for footer
+  const qrData = encodeURIComponent(`invoiceapp://invoice/${data.details.number}`);
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${qrData}&color=000000`;
+
   return `
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Invoice ${details.number}</title>
+  <meta charset="UTF-8">
   <style>
+    @page { size: A4; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { 
+      width: 210mm; 
+      margin: 0 auto;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      color: #000;
+      background: #fff;
+    }
     body {
-      font-family: 'Arial', sans-serif;
-      font-size: 13px;
-      color: #1a1a1a;
-      line-height: 1.5;
-      ${company.isGrayscale ? 'filter: grayscale(100%);' : ''}
-    }
-    .header-bar {
-      background: #0f172a;
-      color: white;
-      padding: 30px 40px;
+      padding: 10mm;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      flex-direction: column;
+      min-height: auto;
     }
-    .logo {
-      max-width: 180px;
-      max-height: 60px;
-    }
-    .company-name {
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .header-right {
-      text-align: right;
-    }
-    .header-right h1 {
-      font-size: 28px;
-      font-weight: 300;
-      letter-spacing: 3px;
-    }
-    .header-right p {
-      opacity: 0.8;
-      margin-top: 5px;
-    }
-    .content {
-      padding: 40px;
-    }
-    .info-grid {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 40px;
-      gap: 40px;
-    }
-    .info-box {
+    .main-content {
       flex: 1;
-      background: #f8fafc;
-      padding: 25px;
-      border-left: 4px solid #0f172a;
     }
-    .info-box h3 {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #64748b;
-      margin-bottom: 12px;
+    
+    /* Header Layout */
+    .top-bar { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: flex-start; 
+        margin-bottom: 20px; 
+        border-bottom: 2px solid #000;
+        padding-bottom: 15px;
     }
-    .info-box p {
-      margin-bottom: 4px;
+    .brand-section { text-align: left; }
+    .brand-name { font-size: 32px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 20px; }
+    .invoice-header-line { font-size: 18px; font-weight: 900; letter-spacing: 0.5px; }
+
+    .qr-section { text-align: right; }
+
+    /* Info Columns */
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ccc; }
+    .info-col { width: 48%; }
+    .info-title { font-weight: bold; font-size: 15px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
+    .info-row { display: flex; margin-bottom: 4px; }
+    .label { width: 100px; font-weight: bold; font-size: 13px; }
+    .value { flex: 1; font-size: 13px; }
+
+    /* Meta Grid */
+    .meta-grid { display: flex; gap: 10px; margin-bottom: 20px; font-size: 13px; }
+    .meta-item { border: 1px solid #ccc; padding: 8px; flex: 1; }
+    .meta-label { font-weight: bold; display: block; margin-bottom: 2px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+    th { background: #333; color: #fff; padding: 10px 6px; text-align: center; font-weight: bold; border: 1px solid #000; font-size: 11px; }
+    td { border: 1px solid #000; padding: 8px 5px; }
+
+    /* Footer Totals */
+    .totals-section { display: flex; justify-content: flex-end; margin-bottom: 30px; }
+    .totals-table { width: 300px; text-align: right; font-size: 14px; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .total-final { 
+        font-weight: 900; 
+        font-size: 18px; 
+        border-top: 2px solid #000; 
+        border-bottom: 2px solid #000; 
+        padding: 8px 0; 
+        margin-top: 5px; 
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 30px;
+
+    /* Signatures */
+    .signatures { display: flex; justify-content: space-between; margin-bottom: 20px; text-align: center; font-size: 14px; }
+    .sig-block { width: 22%; }
+    .sig-line { border-bottom: 1px solid #000; height: 50px; margin-bottom: 5px; display: flex; align-items: flex-end; justify-content: center; }
+
+    /* Bottom Footer */
+    .page-footer { 
+        display: flex; 
+        justify-content: space-between; 
+        border-top: 1px solid #000; 
+        padding-top: 10px;
+        font-size: 12px;
+        margin-top: 20px;
     }
-    th {
-      background: #0f172a;
-      color: white;
-      padding: 15px 20px;
-      text-align: left;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    th:last-child { text-align: right; }
-    td {
-      padding: 18px 20px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    td:last-child { text-align: right; font-weight: 600; }
-    tr:nth-child(even) td { background: #f8fafc; }
-    .summary-section {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-    .extra-info {
-      flex: 1;
-      max-width: 350px;
-    }
-    .notes-box {
-      background: #f8fafc;
-      padding: 20px;
-      border-radius: 4px;
-      margin-bottom: 20px;
-    }
-    .notes-box h4 {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #64748b;
-      margin-bottom: 10px;
-    }
-    .pay-button { 
-        display: inline-block; 
-        padding: 10px 20px; 
-        border: 1px solid #0f172a;
-        border-radius: 4px; 
-        text-decoration: none; 
-        font-weight: bold; 
-        font-size: 12px; 
-        margin-right: 10px;
-        color: #0f172a;
-    }
-    .summary-box {
-      width: 300px;
-      background: #0f172a;
-      color: white;
-      padding: 25px;
-    }
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-    .summary-row:last-child {
-      border: none;
-      font-size: 20px;
-      font-weight: 700;
-      padding-top: 15px;
-      margin-top: 10px;
-      border-top: 2px solid rgba(255,255,255,0.2);
-    }
-    .signatures {
-      display: flex;
-      justify-content: flex-end;
-      gap: 50px;
-      margin-top: 50px;
-      padding-right: 40px;
-    }
-    .signature-box {
-      text-align: center;
-    }
-    .signature-box img {
-      max-width: 120px;
-      max-height: 50px;
-    }
-    .signature-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #64748b;
-      margin-top: 10px;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 10px;
-    }
-    .bank-bar {
-        margin-top: 40px;
-        padding: 20px;
-        background: #f8fafc;
-        border-top: 2px solid #0f172a;
-        display: flex;
-        justify-content: space-around;
-        font-size: 11px;
-    }
-    .footer {
-      background: #0f172a;
-      padding: 20px 40px;
-      text-align: center;
-      color: #94a3b8;
-      font-size: 12px;
+    .footer-col { flex: 1; }
+    
+    /* Footer Container - no absolute positioning */
+    .footer-container {
+        margin-top: auto;
+        padding-top: 20px;
     }
   </style>
 </head>
 <body>
-  <div class="header-bar">
-    <div>
-      ${company.logoUrl ? `<img src="${company.logoUrl}" class="logo" alt="">` : `<div class="company-name">${company.name}</div>`}
-    </div>
-    <div class="header-right">
-      <h1>${details.type === 'offer' ? (t.offer || 'OFFER') : t.invoice}</h1>
-      <p>${details.number}</p>
-    </div>
-  </div>
 
-  <div class="content">
-    <div class="info-grid">
-      <div class="info-box">
-        <h3>${t.billTo}</h3>
-        <p><strong>${client.name}</strong></p>
-        <p>${client.address}</p>
-        <p>${client.email}</p>
+  <div class="main-content">
+      <!-- 1. Top Bar (Logo Left, QR Right) -->
+      <div class="top-bar">
+        <div class="brand-section">
+            <div class="brand-name">${data.company.name || 'EMRI I BIZNESIT'}</div>
+            <div class="invoice-header-line">${documentLabel.toUpperCase()}: ${data.details.number}</div>
+        </div>
+        <div class="qr-section">
+            ${config.showQrCode ? '<img src="' + qrCodeUrl + '" style="height: 80px; width: 80px;" />' : ''}
+        </div>
       </div>
-      <div class="info-box">
-        <h3>${t.details}</h3>
-        <p><strong>${t.date}:</strong> ${details.issueDate}</p>
-        <p><strong>${details.type === 'offer' ? (t.validUntil || 'VALID UNTIL') : t.due}:</strong> ${details.dueDate || 'On Receipt'}</p>
-        <p><strong>Currency:</strong> ${details.currency}</p>
-      </div>
-    </div>
 
-    <table>
-      <thead>
-        <tr>
-          <th>${t.description}</th>
-          <th>${t.qty}</th>
-          <th>${t.price}</th>
-          <th>${t.total}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${items.map(item => `
-          <tr>
-            <td>${item.description}</td>
-            <td>${item.quantity} ${item.unit || ''}</td>
-            <td>${formatCurrency(item.price)}</td>
-            <td>${formatCurrency(item.total)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <div class="summary-section">
-      <div class="extra-info">
-        ${(company.paymentLinkStripe || company.paymentLinkPaypal) ? `
-            <div style="margin-bottom: 25px;">
-                <h4 style="font-size: 11px; text-transform: uppercase; color: #64748b; margin-bottom: 12px;">${t.payNow}</h4>
-                ${company.paymentLinkStripe ? `<a href="${company.paymentLinkStripe}" class="pay-button">Stripe Secure</a>` : ''}
-                ${company.paymentLinkPaypal ? `<a href="${company.paymentLinkPaypal}" class="pay-button">PayPal.me</a>` : ''}
+      <!-- 2. Client Info (Single Section) -->
+      <div class="info-section">
+        <div class="info-col" style="width: 100%;">
+          <div class="info-title">Fatura Për:</div>
+          <div class="value" style="font-weight: bold; font-size: 14px; margin-bottom: 6px;">${data.client.name}</div>
+          <div style="display: flex; gap: 40px;">
+            <div style="flex: 1;">
+              <div class="info-row"><span class="label">NUI:</span><span class="value">${data.client.nui || data.client.taxId || '-'}</span></div>
+              <div class="info-row"><span class="label">Nr. Fiskal:</span><span class="value">${data.client.fiscalNumber || '-'}</span></div>
+              <div class="info-row"><span class="label">Nr. TVSH:</span><span class="value">${data.client.vatNumber || '-'}</span></div>
             </div>
-        ` : ''}
-
-        ${details.notes ? `
-            <div class="notes-box">
-                <h4>Notes</h4>
-                <p style="color: #475569;">${details.notes}</p>
+            <div style="flex: 1;">
+              <div class="info-row"><span class="label">Kontakti:</span><span class="value">${data.client.email || '-'}</span></div>
+              <div class="info-row"><span class="label">Tel:</span><span class="value">${data.client.phone || '-'}</span></div>
+              <div class="info-row"><span class="label">Adresa:</span><span class="value">${data.client.address || '-'}</span></div>
             </div>
-        ` : ''}
-
-        ${details.terms ? `
-            <div class="notes-box">
-                <h4>${t.terms}</h4>
-                <p style="color: #475569; font-size: 11px;">${details.terms}</p>
-            </div>
-        ` : ''}
+          </div>
+        </div>
       </div>
 
-      <div class="summary-box">
-        <div class="summary-row">
-          <span>${t.subtotal}</span>
-          <span>${formatCurrency(summary.subtotal)}</span>
+      <!-- 3. Meta Grid -->
+      <div class="meta-grid">
+         <div class="meta-item">
+          <span class="meta-label">Data e faturës:</span>
+          ${formatDate(data.details.issueDate)}
         </div>
-        <div class="summary-row">
-          <span>${t.tax}</span>
-          <span>${formatCurrency(summary.tax)}</span>
-        </div>
-        ${summary.discount > 0 ? `
-        <div class="summary-row">
-          <span>${t.discount}</span>
-          <span>-${formatCurrency(summary.discount)}</span>
-        </div>
-        ` : ''}
-        <div class="summary-row">
-          <span>${t.totalDue}</span>
-          <span>${formatCurrency(summary.total)}</span>
+        <div class="meta-item">
+          <span class="meta-label">Afati për pagesë:</span>
+          ${formatDate(data.details.dueDate)}
         </div>
       </div>
-    </div>
 
-    ${(company.bankName || company.bankIban) ? `
-    <div class="bank-bar">
-        ${company.bankName ? `<div><strong>${t.bank}:</strong> ${company.bankName}</div>` : ''}
-        ${company.bankIban ? `<div><strong>${t.iban}:</strong> ${company.bankIban}</div>` : ''}
-        ${company.bankSwift ? `<div><strong>${t.swift}:</strong> ${company.bankSwift}</div>` : ''}
-    </div>
-    ` : ''}
+      <!-- 4. Table -->
+      <table>
+    <thead>
+      <tr>
+        ${cols.rowNumber ? '<th>Nr</th>' : ''}
+        ${cols.sku ? '<th>Shifra</th>' : ''}
+        ${cols.description ? '<th style="text-align: left;">Përshkrimi</th>' : ''}
+        ${cols.quantity ? '<th>Sasia</th>' : ''}
+        ${cols.unit ? '<th>Njësia</th>' : ''}
+        ${cols.unitPrice ? '<th>Çmimi pa Tvsh</th>' : ''}
+        ${cols.discount ? '<th>Rabati</th>' : ''}
+        ${cols.taxRate ? '<th>Tvsh %</th>' : ''}
+        ${cols.lineTotal ? '<th>Vlera shitëse</th>' : ''}
+        ${cols.grossPrice ? '<th>Çmimi me Tvsh</th>' : ''}
+      </tr>
+    </thead>
+    <tbody>
+      ${data.items.map((item, index) => {
+    const netPrice = item.price;
+    const taxRate = item.taxRate || 0;
+    const discountPercent = item.discount || 0;
 
-    <div class="signatures">
-      ${company.signatureUrl ? `
-      <div class="signature-box">
-        <img src="${company.signatureUrl}" alt="">
-        <div class="signature-label">${t.signature || 'Seller'}</div>
+    // item.total in data comes as Net Total (after discount, before tax)
+    // We confirm this logic:
+    // Net Line Total = (Unit Price * Qty) - Discount Amount (which is item.total)
+    // Tax Amount = item.total * (taxRate / 100)
+    // Final Line Total = item.total + Tax Amount
+
+    // However, if item.total includes tax in some contexts, we must be careful.
+    // Based on InvoiceFormScreen logic: item.amount = (qty * price) - discount. Tax is separate.
+    // So item.total is Net Discounted.
+
+    const taxAmount = item.total * (taxRate / 100);
+    const lineFinalTotal = item.total + taxAmount;
+
+    // Gross Unit Price (for 'Çmimi me Tvsh' column)
+    const grossPrice = netPrice * (1 + taxRate / 100);
+
+    let row = '<tr>';
+    if (cols.rowNumber) row += '<td style="text-align: center;">' + (index + 1) + '</td>';
+    if (cols.sku) row += '<td>' + (item.sku || '-') + '</td>';
+    if (cols.description) row += '<td>' + item.description + '</td>';
+    if (cols.quantity) row += '<td style="text-align: right;">' + item.quantity + '</td>';
+    if (cols.unit) row += '<td style="text-align: center;">' + (item.unit || 'copë') + '</td>';
+    if (cols.unitPrice) row += '<td style="text-align: right;">' + formatCurrency(netPrice) + '</td>';
+    if (cols.discount) row += '<td style="text-align: right;">' + discountPercent + '%</td>';
+    if (cols.taxRate) row += '<td style="text-align: right;">' + taxRate + '%</td>';
+    if (cols.lineTotal) row += '<td style="text-align: right; font-weight: bold;">' + formatCurrency(lineFinalTotal) + '</td>';
+    if (cols.grossPrice) row += '<td style="text-align: right;">' + formatCurrency(grossPrice) + '</td>';
+    row += '</tr>';
+    return row;
+  }).join('')}
+    </tbody>
+      </table>
+
+      <!-- 5. Totals -->
+      <div class="totals-section">
+        <div class="totals-table">
+          <div class="total-row">
+            <span>Vlera pa rabat:</span>
+            <span>${
+    // Recalculate based on items to align with new logic
+    formatCurrency(data.items.reduce((sum, item) => sum + (item.quantity * item.price), 0))
+    }</span>
+          </div>
+          <div class="total-row">
+            <span>Rabati:</span>
+            <span>${
+    // Total Discount Amount
+    formatCurrency(data.items.reduce((sum, item) => {
+      // item.total is net discounted. 
+      // Discount Amount = (Price * Qty) - Net Discounted Base (item.total).
+      // Or explicit calc: Price * Qty * (Discount/100).
+      const original = item.quantity * item.price;
+      const discountAmt = original * ((item.discount || 0) / 100);
+      return sum + discountAmt;
+    }, 0))
+    }</span>
+          </div>
+          <div class="total-row">
+            <span>Vlera pa tvsh:</span>
+            <span>${
+    // Vlera pa Tvsh = Vlera shitëse (Total Final) - TVSH
+    // Total Final = Sum(lineFinalTotal)
+    // TVSH = Sum(taxAmount)
+    formatCurrency(
+      data.items.reduce((sum, item) => {
+        const taxAmount = item.total * ((item.taxRate || 0) / 100);
+        const lineFinalTotal = item.total + taxAmount;
+        return sum + lineFinalTotal;
+      }, 0) -
+      data.items.reduce((sum, item) => sum + (item.total * ((item.taxRate || 0) / 100)), 0)
+    )
+    }</span>
+          </div>
+          <div class="total-row">
+            <span>Tvsh Total:</span>
+            <span>${formatCurrency(data.items.reduce((sum, item) => sum + (item.total * ((item.taxRate || 0) / 100)), 0))
+    }</span>
+          </div>
+          <div class="total-row total-final">
+            <span>Vlera për pagesë:</span>
+            <span>${formatCurrency(data.items.reduce((sum, item) => {
+      const taxAmount = item.total * ((item.taxRate || 0) / 100);
+      return sum + item.total + taxAmount;
+    }, 0))
+    } €</span>
+          </div>
+        </div>
+      </div>
+  </div> <!-- end main-content -->
+
+  <!-- Footer Container (Signatures + Footer) -->
+  <div class="footer-container">
+      <!-- 6. Signatures -->
+      ${(config.showSignature || config.showBuyerSignature) ? `
+      <div class="signatures">
+        ${config.showSignature ? `
+        <div class="sig-block">
+          <div class="sig-title">Faturoi:</div>
+          <div class="sig-line">
+            ${data.company.signatureUrl ? '<img src="' + data.company.signatureUrl + '" style="max-height: 45px; max-width: 100%; object-fit: contain;" />' : ''}
+          </div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-title">Dërgoi:</div>
+          <div class="sig-line"></div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-title">Kontrolloi:</div>
+          <div class="sig-line"></div>
+        </div>
+        ` : ''}
+        ${config.showBuyerSignature ? `
+        <div class="sig-block">
+          <div class="sig-title">Pranoi:</div>
+          <div class="sig-line">
+            ${data.details.buyerSignatureUrl ? '<img src="' + data.details.buyerSignatureUrl + '" style="max-height: 45px; max-width: 100%; object-fit: contain;" />' : ''}
+          </div>
+          <div>Emri i plotë</div>
+        </div>
+        ` : ''}
       </div>
       ` : ''}
-      ${(details.showBuyerSignature && details.buyerSignatureUrl) ? `
-      <div class="signature-box">
-        <img src="${details.buyerSignatureUrl}" alt="">
-        <div class="signature-label">${t.buyerSignature || 'Buyer'}</div>
+
+      <!-- 7. Page Footer -->
+      <div class="page-footer">
+        ${config.showBankDetails ? `
+        <div class="footer-col">
+          <p><strong>Nr. ID:</strong> ${data.company.taxId || '-'}</p>
+          <p><strong>Bank:</strong> ${data.company.bankName || '-'}</p>
+          <p><strong>IBAN:</strong> ${data.company.bankIban || '-'}</p>
+        </div>
+        ` : '<div class="footer-col"></div>'}
+        <div class="footer-col" style="text-align: center;">
+          <p>${data.company.address}</p>
+          <p>${data.company.city ? data.company.city + ', ' : ''}${data.company.country || 'Kosovo'}</p>
+          <p>${data.company.phone || ''}</p>
+        </div>
+        <div class="footer-col" style="text-align: right;">
+            <p>${data.company.email || ''}</p>
+          <p>${data.company.website || ''}</p>
+          <p style="margin-top: 5px; color: #666;">© Faturicka 2025</p>
+        </div>
       </div>
-      ` : ''}
-      ${company.stampUrl ? `
-      <div class="signature-box">
-        <img src="${company.stampUrl}" alt="">
-        <div class="signature-label">Company Stamp</div>
-      </div>
-      ` : ''}
-    </div>
   </div>
 
-  <div class="footer">
-    <p>Thank you for your business! | ${company.name}</p>
-  </div>
 </body>
 </html>
-  `;
+    `;
 }

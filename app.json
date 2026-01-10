@@ -35,7 +35,14 @@
     "plugins": [
       "expo-web-browser",
       "expo-mail-composer",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location to record attendance.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

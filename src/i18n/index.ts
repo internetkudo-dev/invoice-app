@@ -268,6 +268,10 @@ export const translations = {
         payouts: 'Payouts',
         stockAlert: 'Stock Alert',
         remaining: 'remaining',
+        totalSales: 'Total Sales',
+        noTransactions: 'No recent transactions',
+        connectStripeDesc: 'Accept online payments and track transactions',
+        connect: 'Connect',
     },
     sq: {
         dashboard: 'Paneli',
@@ -498,6 +502,10 @@ export const translations = {
         payouts: 'Pagesat',
         stockAlert: 'Alarm Stoku',
         remaining: 'mbetura',
+        totalSales: 'Shitjet Totale',
+        noTransactions: 'Nuk ka transaksione të fundit',
+        connectStripeDesc: 'Pranoni pagesa online dhe gjurmoni transaksionet',
+        connect: 'Lidhu',
     },
 };
 

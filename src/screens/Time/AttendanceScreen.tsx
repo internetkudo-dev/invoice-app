@@ -18,6 +18,7 @@ export function AttendanceScreen({ navigation }: any) {
     const [punching, setPunching] = useState(false);
     const [userEmployee, setUserEmployee] = useState<any>(null);
     const [location, setLocation] = useState<any>(null);
+    const [address, setAddress] = useState<string | null>(null);
 
     const bgColor = isDark ? '#0f172a' : '#f8fafc';
     const textColor = isDark ? '#fff' : '#1e293b';
@@ -35,8 +36,22 @@ export function AttendanceScreen({ navigation }: any) {
             if (status !== 'granted') return;
             let loc = await Location.getCurrentPositionAsync({});
             setLocation(loc);
+
+            // Reverse Geocode
+            if (loc) {
+                const [addr] = await Location.reverseGeocodeAsync({
+                    latitude: loc.coords.latitude,
+                    longitude: loc.coords.longitude
+                });
+                if (addr) {
+                    const addrStr = [addr.city, addr.country].filter(Boolean).join(', ');
+                    setAddress(addrStr || 'Unknown Location');
+                }
+            }
         } catch (e) { }
     };
+
+
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -93,9 +108,9 @@ export function AttendanceScreen({ navigation }: any) {
         const { data } = await supabase
             .from('attendance_records')
             .select(`
-                *,
-                employees (first_name, last_name, avatar_url)
-            `)
+        *,
+        employees (first_name, last_name, avatar_url)
+        `)
             .eq('company_id', companyId)
             .order('check_in', { ascending: false })
             .limit(30);
@@ -103,7 +118,10 @@ export function AttendanceScreen({ navigation }: any) {
     };
 
     const handlePunch = async () => {
-        if (!userEmployee) return;
+        if (!userEmployee) {
+            Alert.alert("Error", "Employee profile not found. Please contact HR.");
+            return;
+        }
         setPunching(true);
         try {
             let currentLoc = null;
@@ -244,7 +262,7 @@ export function AttendanceScreen({ navigation }: any) {
                             <View style={styles.locationTag}>
                                 <MapPin size={14} color={primaryColor} />
                                 <Text style={{ color: primaryColor, fontSize: 12, fontWeight: '600' }}>
-                                    {location ? 'Location Active' : 'Location Pending'}
+                                    {address ? address : (location ? 'Location Active' : 'Location Pending')}
                                 </Text>
                             </View>
 

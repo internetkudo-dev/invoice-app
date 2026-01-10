@@ -1,13 +1,13 @@
 import { InvoiceData, TemplateType } from '../../types';
 import {
-    hidrotermTemplate,
+    corporateTemplate,
 } from './templates';
 
 
 export const templateInfo: Record<TemplateType, { name: string; description: string }> = {
-    hidroterm: {
-        name: 'HidroTherm',
-        description: 'Custom invoice template for Hidroterm',
+    corporate: {
+        name: 'Corporate',
+        description: 'Professional corporate invoice template with comprehensive field mapping',
     },
 };
 
@@ -15,6 +15,6 @@ export const generateInvoiceHtml = (
     data: InvoiceData,
     template: TemplateType
 ): string => {
-    // Only support hidroterm
-    return hidrotermTemplate(data);
+    // Only support corporate
+    return corporateTemplate(data);
 };

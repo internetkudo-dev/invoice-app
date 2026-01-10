@@ -8,7 +8,7 @@ import {
     Switch,
     Alert,
 } from 'react-native';
-import { ArrowLeft, Save, FileText, Type, Hash, Calendar, Percent, User, Package, Plus, Trash2, GripVertical, Layout } from 'lucide-react-native';
+import { ArrowLeft, Save, FileText, Type, Hash, Calendar, Percent, User, Package, Plus, Trash2, GripVertical, Layout, Table, QrCode, Building2 } from 'lucide-react-native';
 import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
 import { supabase } from '../../../api/supabase';
@@ -23,44 +23,92 @@ interface FieldConfig {
     enabled: boolean;
     placeholder?: string;
     defaultValue?: string;
+    category?: 'header' | 'client' | 'items' | 'summary' | 'footer';
+}
+
+interface ColumnConfig {
+    id: string;
+    key: string;
+    label: string;
+    enabled: boolean;
+    width?: string;
 }
 
 interface InvoiceTemplateSettings {
     id?: string;
     name: string;
     fields: FieldConfig[];
+    columns: ColumnConfig[];
     showLogo: boolean;
     showSignature: boolean;
+    showBuyerSignature: boolean;
+    showStamp: boolean;
     showNotes: boolean;
     showDiscount: boolean;
     showTax: boolean;
+    showQrCode: boolean;
+    showBankDetails: boolean;
     defaultDueDays: number;
     defaultTaxRate: number;
     primaryColor: string;
     footerText: string;
 }
 
+// Invoice header and meta fields
 const defaultFields: FieldConfig[] = [
-    { id: '1', key: 'invoice_number', label: 'Invoice Number', type: 'text', required: true, enabled: true, placeholder: 'INV-001' },
-    { id: '2', key: 'issue_date', label: 'Issue Date', type: 'date', required: true, enabled: true },
-    { id: '3', key: 'due_date', label: 'Due Date', type: 'date', required: false, enabled: true },
-    { id: '4', key: 'client', label: 'Client', type: 'select', required: true, enabled: true },
-    { id: '5', key: 'items', label: 'Line Items', type: 'text', required: true, enabled: true },
-    { id: '6', key: 'subtotal', label: 'Subtotal', type: 'number', required: true, enabled: true },
-    { id: '7', key: 'tax', label: 'Tax', type: 'number', required: false, enabled: true },
-    { id: '8', key: 'discount', label: 'Discount', type: 'number', required: false, enabled: true },
-    { id: '9', key: 'total', label: 'Total', type: 'number', required: true, enabled: true },
-    { id: '10', key: 'notes', label: 'Notes', type: 'textarea', required: false, enabled: true, placeholder: 'Payment terms, thank you message...' },
+    // Header section
+    { id: '1', key: 'invoice_number', label: 'Invoice Number', type: 'text', required: true, enabled: true, placeholder: 'INV-001', category: 'header' },
+    { id: '2', key: 'issue_date', label: 'Issue Date', type: 'date', required: true, enabled: true, category: 'header' },
+    { id: '3', key: 'due_date', label: 'Due Date', type: 'date', required: false, enabled: true, category: 'header' },
+    { id: '4', key: 'document_type', label: 'Document Type', type: 'select', required: true, enabled: true, category: 'header' },
+    // Client section
+    { id: '5', key: 'client_name', label: 'Client Name', type: 'text', required: true, enabled: true, category: 'client' },
+    { id: '6', key: 'client_nui', label: 'Client NUI', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '7', key: 'client_fiscal_number', label: 'Client Fiscal Number', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '8', key: 'client_vat_number', label: 'Client VAT Number', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '9', key: 'client_address', label: 'Client Address', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '10', key: 'client_email', label: 'Client Email', type: 'text', required: false, enabled: true, category: 'client' },
+    { id: '11', key: 'client_phone', label: 'Client Phone', type: 'text', required: false, enabled: true, category: 'client' },
+    // Summary section
+    { id: '12', key: 'subtotal', label: 'Subtotal', type: 'number', required: true, enabled: true, category: 'summary' },
+    { id: '13', key: 'discount_amount', label: 'Discount Amount', type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '14', key: 'net_amount', label: 'Net Amount (Before Tax)', type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '15', key: 'tax_amount', label: 'Tax Amount', type: 'number', required: false, enabled: true, category: 'summary' },
+    { id: '16', key: 'total', label: 'Total Amount', type: 'number', required: true, enabled: true, category: 'summary' },
+    // Footer section  
+    { id: '17', key: 'notes', label: 'Notes', type: 'textarea', required: false, enabled: true, placeholder: 'Payment terms, thank you message...', category: 'footer' },
+    { id: '18', key: 'bank_name', label: 'Bank Name', type: 'text', required: false, enabled: true, category: 'footer' },
+    { id: '19', key: 'bank_iban', label: 'Bank IBAN', type: 'text', required: false, enabled: true, category: 'footer' },
+    { id: '20', key: 'company_tax_id', label: 'Company Tax ID', type: 'text', required: false, enabled: true, category: 'footer' },
+];
+
+// Items table columns configuration
+const defaultColumns: ColumnConfig[] = [
+    { id: 'col_1', key: 'row_number', label: 'Nr', enabled: true, width: '5%' },
+    { id: 'col_2', key: 'sku', label: 'SKU/Code', enabled: true, width: '10%' },
+    { id: 'col_3', key: 'description', label: 'Description', enabled: true, width: '25%' },
+    { id: 'col_4', key: 'quantity', label: 'Quantity', enabled: true, width: '8%' },
+    { id: 'col_5', key: 'unit', label: 'Unit', enabled: true, width: '8%' },
+    { id: 'col_6', key: 'unit_price', label: 'Unit Price (excl. VAT)', enabled: true, width: '12%' },
+    { id: 'col_7', key: 'discount', label: 'Discount %', enabled: true, width: '8%' },
+    { id: 'col_8', key: 'tax_rate', label: 'VAT %', enabled: true, width: '8%' },
+    { id: 'col_9', key: 'line_total', label: 'Line Total', enabled: true, width: '10%' },
+    { id: 'col_10', key: 'gross_price', label: 'Price (incl. VAT)', enabled: true, width: '10%' },
 ];
 
 const defaultTemplate: InvoiceTemplateSettings = {
     name: 'Default Template',
     fields: defaultFields,
+    columns: defaultColumns,
     showLogo: true,
     showSignature: true,
+    showBuyerSignature: true,
+    showStamp: true,
     showNotes: true,
     showDiscount: true,
     showTax: true,
+    showQrCode: true,
+    showBankDetails: true,
     defaultDueDays: 30,
     defaultTaxRate: 18,
     primaryColor: '#6366f1',
@@ -98,11 +146,16 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 id: data.id,
                 name: data.name,
                 fields: data.fields || defaultFields,
+                columns: data.columns || defaultColumns,
                 showLogo: data.show_logo ?? true,
                 showSignature: data.show_signature ?? true,
+                showBuyerSignature: data.show_buyer_signature ?? true,
+                showStamp: data.show_stamp ?? true,
                 showNotes: data.show_notes ?? true,
                 showDiscount: data.show_discount ?? true,
                 showTax: data.show_tax ?? true,
+                showQrCode: data.show_qr_code ?? true,
+                showBankDetails: data.show_bank_details ?? true,
                 defaultDueDays: data.default_due_days ?? 30,
                 defaultTaxRate: data.default_tax_rate ?? 18,
                 primaryColor: data.primary_color || '#6366f1',
@@ -120,11 +173,16 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                 user_id: user.id,
                 name: template.name,
                 fields: template.fields,
+                columns: template.columns,
                 show_logo: template.showLogo,
                 show_signature: template.showSignature,
+                show_buyer_signature: template.showBuyerSignature,
+                show_stamp: template.showStamp,
                 show_notes: template.showNotes,
                 show_discount: template.showDiscount,
                 show_tax: template.showTax,
+                show_qr_code: template.showQrCode,
+                show_bank_details: template.showBankDetails,
                 default_due_days: template.defaultDueDays,
                 default_tax_rate: template.defaultTaxRate,
                 primary_color: template.primaryColor,
@@ -271,10 +329,45 @@ export function InvoiceTemplateSettingsScreen({ navigation }: any) {
                         <Text style={[styles.sectionTitle, { color: textColor }]}>Display Options</Text>
                     </View>
                     <SettingRow label="Show Company Logo" value={template.showLogo} onToggle={(v) => toggleSection('showLogo', v)} />
-                    <SettingRow label="Show Signature Field" value={template.showSignature} onToggle={(v) => toggleSection('showSignature', v)} />
+                    <SettingRow label="Show Seller Signature" value={template.showSignature} onToggle={(v) => toggleSection('showSignature', v)} />
+                    <SettingRow label="Show Buyer Signature" value={template.showBuyerSignature} onToggle={(v) => toggleSection('showBuyerSignature', v)} />
+                    <SettingRow label="Show Company Stamp" value={template.showStamp} onToggle={(v) => toggleSection('showStamp', v)} />
+                    <SettingRow label="Show QR Code" value={template.showQrCode} onToggle={(v) => toggleSection('showQrCode', v)} />
                     <SettingRow label="Show Notes Section" value={template.showNotes} onToggle={(v) => toggleSection('showNotes', v)} />
                     <SettingRow label="Show Discount Field" value={template.showDiscount} onToggle={(v) => toggleSection('showDiscount', v)} />
                     <SettingRow label="Show Tax Field" value={template.showTax} onToggle={(v) => toggleSection('showTax', v)} />
+                    <SettingRow label="Show Bank Details" value={template.showBankDetails} onToggle={(v) => toggleSection('showBankDetails', v)} />
+                </Card>
+
+                {/* Items Table Columns */}
+                <Card style={{ backgroundColor: cardBg, marginBottom: 16 }}>
+                    <View style={styles.sectionHeader}>
+                        <Table color={primaryColor} size={20} />
+                        <Text style={[styles.sectionTitle, { color: textColor }]}>Items Table Columns</Text>
+                    </View>
+                    <Text style={[styles.helperText, { color: mutedColor }]}>
+                        Toggle which columns appear in the invoice items table.
+                    </Text>
+                    {template.columns.map((col) => (
+                        <View key={col.id} style={[styles.columnRow, { backgroundColor: inputBg }]}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.columnLabel, { color: textColor }]}>{col.label}</Text>
+                                <Text style={[styles.columnKey, { color: mutedColor }]}>{col.key}</Text>
+                            </View>
+                            <Switch
+                                value={col.enabled}
+                                onValueChange={(val) => {
+                                    setTemplate(prev => ({
+                                        ...prev,
+                                        columns: prev.columns.map(c => c.id === col.id ? { ...c, enabled: val } : c),
+                                    }));
+                                    setHasChanges(true);
+                                }}
+                                trackColor={{ false: '#334155', true: primaryColor + '50' }}
+                                thumbColor={col.enabled ? primaryColor : '#64748b'}
+                            />
+                        </View>
+                    ))}
                 </Card>
 
                 {/* Default Values */}
@@ -354,4 +447,7 @@ const styles = StyleSheet.create({
     optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     optionLabel: { fontSize: 13 },
     helperText: { fontSize: 13, marginBottom: 16 },
+    columnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 12, marginBottom: 8 },
+    columnLabel: { fontSize: 15, fontWeight: '600', marginBottom: 2 },
+    columnKey: { fontSize: 12 },
 });

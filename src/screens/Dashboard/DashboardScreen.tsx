@@ -56,7 +56,8 @@ export function DashboardScreen({ navigation }: any) {
         totalNet: 0,
         totalPayouts: 0,
         pendingPayouts: 0,
-        isConnected: false
+        isConnected: false,
+        recentTransactions: [] as any[],
     });
     const [isPrivacyMode, setIsPrivacyMode] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState<{ month: string; revenue: number; expenses: number } | null>(null);
@@ -78,8 +79,22 @@ export function DashboardScreen({ navigation }: any) {
 
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profileData) {
-            setProfile(profileData);
             const companyId = profileData.active_company_id || profileData.company_id || user.id;
+
+            // Fetch active company name if using a different company
+            let displayCompanyName = profileData.company_name;
+            if (profileData.active_company_id && profileData.active_company_id !== user.id) {
+                const { data: companyData } = await supabase
+                    .from('companies')
+                    .select('company_name')
+                    .eq('id', profileData.active_company_id)
+                    .single();
+                if (companyData?.company_name) {
+                    displayCompanyName = companyData.company_name;
+                }
+            }
+
+            setProfile({ ...profileData, company_name: displayCompanyName });
 
             const { data: invoicesData } = await supabase
                 .from('invoices')
@@ -116,7 +131,8 @@ export function DashboardScreen({ navigation }: any) {
                     totalNet: summary.totalNet,
                     totalPayouts: summary.totalPayouts,
                     pendingPayouts: summary.pendingPayouts,
-                    isConnected: true
+                    isConnected: true,
+                    recentTransactions: summary.recentTransactions || [],
                 });
             } else {
                 setStripeSummary(prev => ({ ...prev, isConnected: false }));
@@ -425,30 +441,6 @@ export function DashboardScreen({ navigation }: any) {
                     {invoices.length === 0 && <Text style={[styles.emptyText, { color: mutedColor }]}>{t('noInvoices', language)}</Text>}
                 </Card>
 
-                {/* Section 5: Profile & Settings Shortcuts */}
-                <View style={[styles.sectionHeader, { marginTop: 8 }]}>
-                    <View style={styles.sectionTitleRow}>
-                        <User color={primaryColor} size={20} />
-                        <Text style={[styles.sectionTitle, { color: textColor }]}>{t('profile', language)}</Text>
-                    </View>
-                </View>
-
-                <View style={{ gap: 12, marginBottom: 24 }}>
-                    <Button
-                        title={t('settings', language) || 'Settings'}
-                        variant="shortcut"
-                        icon={Settings}
-                        onPress={() => navigation.navigate('Settings', { screen: 'SettingsMain' })}
-                    />
-                    {stripeSummary.isConnected && (
-                        <Button
-                            title="Stripe Dashboard"
-                            variant="shortcut"
-                            icon={CreditCard}
-                            onPress={() => navigation.navigate('Settings', { screen: 'StripeDashboard' })}
-                        />
-                    )}
-                </View>
 
                 {/* Online Sales Section */}
                 <View style={[styles.sectionHeader, { marginTop: 8 }]}>
@@ -456,7 +448,92 @@ export function DashboardScreen({ navigation }: any) {
                         <ShoppingCart color={primaryColor} size={20} />
                         <Text style={[styles.sectionTitle, { color: textColor }]}>{t('onlineSales', language)}</Text>
                     </View>
+                    {stripeSummary.isConnected && (
+                        <TouchableOpacity onPress={() => navigation.navigate('Settings', { screen: 'StripeDashboard' })}>
+                            <Text style={{ color: primaryColor, fontWeight: '600' }}>{t('viewAll', language)}</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
+
+                {stripeSummary.isConnected ? (
+                    <Card style={[styles.recentCard, { marginBottom: 16 }]}>
+                        {/* Online Sales Quick Stats */}
+                        <View style={[styles.onlineSalesStats, { borderBottomColor: borderColor }]}>
+                            <View style={styles.onlineSalesStat}>
+                                <Text style={[styles.onlineSalesStatLabel, { color: mutedColor }]}>{t('totalSales', language) || 'Total Sales'}</Text>
+                                <Text style={[styles.onlineSalesStatValue, { color: '#10b981' }]}>
+                                    {isPrivacyMode ? '****' : formatCurrency(stripeSummary.totalSales)}
+                                </Text>
+                            </View>
+                            <View style={[styles.onlineSalesStatDivider, { backgroundColor: borderColor }]} />
+                            <View style={styles.onlineSalesStat}>
+                                <Text style={[styles.onlineSalesStatLabel, { color: mutedColor }]}>{t('pending', language)}</Text>
+                                <Text style={[styles.onlineSalesStatValue, { color: '#f59e0b' }]}>
+                                    {isPrivacyMode ? '****' : formatCurrency(stripeSummary.pendingPayouts)}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Recent Transactions */}
+                        {stripeSummary.recentTransactions.length > 0 ? (
+                            stripeSummary.recentTransactions.slice(0, 5).map((txn: any, index: number) => (
+                                <View
+                                    key={txn.id || index}
+                                    style={[
+                                        styles.transactionItem,
+                                        { borderBottomColor: borderColor },
+                                        index === Math.min(stripeSummary.recentTransactions.length - 1, 4) && { borderBottomWidth: 0 }
+                                    ]}
+                                >
+                                    <View style={styles.transactionIcon}>
+                                        <CreditCard color={txn.type === 'refund' ? '#ef4444' : '#10b981'} size={16} />
+                                    </View>
+                                    <View style={styles.transactionInfo}>
+                                        <Text style={[styles.transactionDesc, { color: textColor }]} numberOfLines={1}>
+                                            {txn.description || txn.customer_email || 'Online Payment'}
+                                        </Text>
+                                        <Text style={[styles.transactionDate, { color: mutedColor }]}>
+                                            {new Date(txn.created_at).toLocaleDateString()}
+                                        </Text>
+                                    </View>
+                                    <Text style={[
+                                        styles.transactionAmount,
+                                        { color: txn.type === 'refund' ? '#ef4444' : '#10b981' }
+                                    ]}>
+                                        {txn.type === 'refund' ? '-' : '+'}{isPrivacyMode ? '****' : formatCurrency(txn.amount)}
+                                    </Text>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={[styles.emptyText, { color: mutedColor }]}>
+                                {t('noTransactions', language) || 'No recent transactions'}
+                            </Text>
+                        )}
+                    </Card>
+                ) : (
+                    <Card style={[styles.connectCard, { backgroundColor: isDark ? '#1e3a5f' : '#eff6ff' }]}>
+                        <View style={styles.connectCardContent}>
+                            <View style={[styles.connectIconWrapper, { backgroundColor: primaryColor + '20' }]}>
+                                <CreditCard color={primaryColor} size={24} />
+                            </View>
+                            <View style={styles.connectTextContent}>
+                                <Text style={[styles.connectTitle, { color: textColor }]}>
+                                    {t('connectStripe', language) || 'Connect Stripe'}
+                                </Text>
+                                <Text style={[styles.connectDesc, { color: mutedColor }]}>
+                                    {t('connectStripeDesc', language) || 'Accept online payments and track transactions'}
+                                </Text>
+                            </View>
+                        </View>
+                        <Button
+                            title={t('connect', language) || 'Connect'}
+                            variant="primary"
+                            icon={ChevronRight}
+                            onPress={() => navigation.navigate('Settings', { screen: 'PaymentIntegrations' })}
+                            style={{ marginTop: 12 }}
+                        />
+                    </Card>
+                )}
 
                 {/* Low Stock Alerts */}
                 {lowStockProducts.length > 0 && (
@@ -626,5 +703,91 @@ const styles = StyleSheet.create({
         width: 1,
         height: 24,
         marginHorizontal: 20,
+    },
+
+    // Online Sales Section
+    onlineSalesStats: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        marginBottom: 8,
+    },
+    onlineSalesStat: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    onlineSalesStatLabel: {
+        fontSize: 12,
+        marginBottom: 4,
+    },
+    onlineSalesStatValue: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    onlineSalesStatDivider: {
+        width: 1,
+        height: 30,
+        marginHorizontal: 16,
+    },
+    transactionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+    },
+    transactionIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    transactionInfo: {
+        flex: 1,
+    },
+    transactionDesc: {
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    transactionDate: {
+        fontSize: 12,
+    },
+    transactionAmount: {
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    connectCard: {
+        padding: 20,
+        borderRadius: 16,
+        marginBottom: 16,
+    },
+    connectCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    connectIconWrapper: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+    },
+    connectTextContent: {
+        flex: 1,
+    },
+    connectTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    connectDesc: {
+        fontSize: 13,
     },
 });

@@ -184,7 +184,9 @@ export function ProductsScreen({ navigation, showHeader = false }: ProductsScree
                     </View>
                     <View style={styles.productFooter}>
                         <View style={styles.priceRow}>
-                            <Text style={styles.productPrice}>{formatCurrency(Number(item.unit_price))}</Text>
+                            <Text style={styles.productPrice}>
+                                {formatCurrency(Number(item.unit_price) * (1 + (item.tax_rate || 0) / 100))}
+                            </Text>
                             <Text style={[styles.unitText, { color: mutedColor }]}>/{item.unit}</Text>
                         </View>
                         {item.tax_rate && item.tax_rate > 0 && (
